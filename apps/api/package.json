@@ -1,0 +1,52 @@
+{
+  "name": "@lsa/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput & node --watch --env-file-if-exists=../../.env dist/main.js",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lsa/contracts": "workspace:*",
+    "@lsa/db": "workspace:*",
+    "@lsa/domain": "workspace:*",
+    "@nestjs/common": "12.1.1",
+    "@nestjs/core": "12.1.1",
+    "@nestjs/platform-express": "12.1.1",
+    "@nestjs/platform-socket.io": "12.1.1",
+    "@nestjs/swagger": "12.0.2",
+    "@nestjs/throttler": "6.7.1",
+    "@nestjs/websockets": "12.1.1",
+    "@temporalio/client": "1.24.0",
+    "cookie-parser": "1.4.7",
+    "drizzle-orm": "0.45.3",
+    "express": "5.2.1",
+    "helmet": "8.3.0",
+    "jsonwebtoken": "9.0.3",
+    "pg": "8.23.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "socket.io": "4.8.4",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@lsa/config": "workspace:*",
+    "@nestjs/testing": "12.1.1",
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "5.0.6",
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "22.20.4",
+    "@types/pg": "8.23.1",
+    "@types/supertest": "7.2.1",
+    "eslint": "10.11.0",
+    "socket.io-client": "4.8.4",
+    "supertest": "7.3.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.2"
+  }
+}

@@ -9,6 +9,7 @@ export const WORKFLOW_NAMES = {
   run: 'sdlcRunWorkflow',
   triage: 'triageTicketWorkflow',
   syncSource: 'syncSourceWorkflow',
+  agentReply: 'agentReplyWorkflow',
 } as const;
 
 export const SIGNALS = {
@@ -30,6 +31,11 @@ export interface TriageWorkflowInput {
 
 export interface SyncSourceWorkflowInput {
   sourceId: string;
+}
+
+export interface AgentReplyWorkflowInput {
+  commentId: string;
+  agentKey: import('./enums.js').AgentKey;
 }
 
 export interface GateDecisionSignal {
@@ -59,4 +65,5 @@ export const workflowIds = {
   run: (runId: string) => `run-${runId}`,
   triage: (ticketId: string) => `triage-${ticketId}`,
   syncSource: (sourceId: string) => `sync-${sourceId}`,
+  agentReply: (commentId: string) => `reply-${commentId}`,
 };

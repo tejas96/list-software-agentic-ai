@@ -140,3 +140,19 @@ export const AGENT_ORDER: AgentKey[] = [
   'release',
   'documentation',
 ];
+
+/**
+ * Find agents mentioned in a comment, e.g. "@QA" or "@LegacyIntel" or "@legacy_intelligence".
+ * Matching ignores case, spaces, dashes and underscores.
+ */
+export function mentionedAgents(body: string): AgentKey[] {
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-/]/g, '');
+  const tokens = [...body.matchAll(/@([A-Za-z][\w\-/]{1,40})/g)].map((m) => norm(m[1]!));
+  if (tokens.length === 0) return [];
+  const found = new Set<AgentKey>();
+  for (const a of Object.values(AGENTS)) {
+    const names = [a.key, a.name, a.shortName].map(norm);
+    if (tokens.some((t) => names.includes(t))) found.add(a.key);
+  }
+  return [...found];
+}
