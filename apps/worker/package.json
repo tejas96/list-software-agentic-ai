@@ -1,0 +1,39 @@
+{
+  "name": "@lsa/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput & node --watch --env-file-if-exists=../../.env dist/main.js",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lsa/adapters": "workspace:*",
+    "@lsa/agents": "workspace:*",
+    "@lsa/contracts": "workspace:*",
+    "@lsa/db": "workspace:*",
+    "@lsa/domain": "workspace:*",
+    "@lsa/knowledge": "workspace:*",
+    "@temporalio/activity": "1.24.0",
+    "@temporalio/common": "1.24.0",
+    "@temporalio/worker": "1.24.0",
+    "@temporalio/workflow": "1.24.0",
+    "drizzle-orm": "0.45.3",
+    "picomatch": "4.0.7",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@lsa/config": "workspace:*",
+    "@temporalio/client": "1.24.0",
+    "@temporalio/testing": "1.24.0",
+    "@types/node": "22.20.4",
+    "@types/picomatch": "4.0.3",
+    "eslint": "10.11.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.2"
+  }
+}
