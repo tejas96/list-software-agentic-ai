@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+onlyBuiltDependencies:
+  - "@node-rs/argon2"
+  - "@swc/core"
+  - "esbuild"
+  - "@temporalio/core-bridge"
+  - "oracledb"
+  - "protobufjs"
+  - "sharp"

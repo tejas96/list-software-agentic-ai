@@ -1,0 +1,53 @@
+# Local and single-host infrastructure for the platform.
+# Postgres 17 (with pgvector) holds platform data AND Temporal's persistence.
+name: lsa
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lsa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lsa}
+      POSTGRES_DB: ${POSTGRES_DB:-lsa}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lsa} -d ${POSTGRES_DB:-lsa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-lsa}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-lsa}
+      POSTGRES_SEEDS: postgres
+      DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    healthcheck:
+      test: ["CMD-SHELL", "tctl --address temporal:7233 cluster health | grep -q SERVING"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  temporal-ui:
+    image: temporalio/ui:2.39.0
+    profiles: ["ui"]
+    depends_on: [temporal]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "8233:8080"
+
+volumes:
+  pgdata:

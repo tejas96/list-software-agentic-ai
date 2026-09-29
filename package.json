@@ -1,0 +1,24 @@
+{
+  "name": "list-agentic-platform",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @lsa/db generate",
+    "db:migrate": "pnpm --filter @lsa/db migrate",
+    "db:seed": "pnpm --filter @lsa/db seed",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "prettier": "3.9.9",
+    "turbo": "2.11.5",
+    "typescript": "5.9.3"
+  }
+}
