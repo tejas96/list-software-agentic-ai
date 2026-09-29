@@ -32,6 +32,16 @@ export const ProjectSettings = z.object({
   buildCommand: z.string().nullable().default(null),
   /** Git branch new work branches start from. */
   baseBranch: z.string().default('main'),
+  /** Knowledge source whose repository the agents work in. Defaults to the project's first Git source. */
+  workSourceId: z.string().nullable().default(null),
+  /**
+   * Oracle schema the agents may change and test against. Never point this at production:
+   * agents run DDL and PL/SQL here.
+   */
+  sandboxDb: z
+    .object({ connectString: z.string().min(3), credentialId: z.string() })
+    .nullable()
+    .default(null),
 });
 export type ProjectSettings = z.infer<typeof ProjectSettings>;
 
