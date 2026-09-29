@@ -211,7 +211,7 @@ export class WorkspaceService {
     projectId: string | undefined,
     before: number | undefined,
   ): Promise<ActivityDto[]> {
-    const visible = await this.access.visibleProjectIds(user);
+    const visible = await this.access.visibleProjectIds(user, { includeArchived: true });
     let scope =
       visible === null ? undefined : visible.length ? inArray(activities.projectId, visible) : sql`false`;
     if (projectId) {

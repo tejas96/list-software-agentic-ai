@@ -218,6 +218,18 @@ describe.skipIf(!enabled)('API end to end', () => {
     ).toBe(401);
   });
 
+  it('hides archived projects from working views but keeps their history', async () => {
+    const before = await admin.get('/api/v1/tickets?limit=500');
+    expect((before.body as { key: string }[]).some((t) => t.key.startsWith(`${key}-`))).toBe(true);
+    expect(
+      (await admin.patch(`/api/v1/projects/${projectId}`).set(CLIENT).send({ archived: true })).status,
+    ).toBe(200);
+    const after = await admin.get('/api/v1/tickets?limit=500');
+    expect((after.body as { key: string }[]).some((t) => t.key.startsWith(`${key}-`))).toBe(false);
+    const history = await admin.get(`/api/v1/audit?projectId=${projectId}`);
+    expect(history.body.length).toBeGreaterThan(0);
+  });
+
   it('keeps the audit chain intact and pageable', async () => {
     const verify = await admin.get('/api/v1/audit/verify');
     expect(verify.status).toBe(200);

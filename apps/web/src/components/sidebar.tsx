@@ -131,6 +131,17 @@ export function Sidebar() {
           label={status?.llm.configured ? `Agents ready (${status.llm.model})` : 'Agents need an LLM key'}
           warn
         />
+        <StatusRow
+          ok={!!status && status.oracleTooling.forms && status.oracleTooling.reports}
+          label={
+            !status || (!status.oracleTooling.forms && !status.oracleTooling.reports)
+              ? 'Oracle tools not set up'
+              : status.oracleTooling.forms && status.oracleTooling.reports
+                ? 'Oracle tools ready'
+                : `Oracle ${status.oracleTooling.forms ? 'Reports' : 'Forms'} tools missing`
+          }
+          warn
+        />
         <Link
           href="/agents"
           className="mt-1 flex items-center gap-1.5 text-[12px] text-accent hover:underline"

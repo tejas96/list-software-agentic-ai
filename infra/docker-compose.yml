@@ -1,6 +1,20 @@
-# Local and single-host infrastructure for the platform.
+# Local and single-host deployment of the platform.
 # Postgres 17 (with pgvector) holds platform data AND Temporal's persistence.
+#
+#   Infrastructure only (development):  docker compose -f infra/docker-compose.yml up -d
+#   Whole platform:                     docker compose -f infra/docker-compose.yml --profile app up -d --build
+#
+# The app services read secrets from the repository-root .env (see .env.example).
 name: lsa
+
+x-app-env: &app-env
+  env_file: ../.env
+  environment:
+    DATABASE_URL: postgres://${POSTGRES_USER:-lsa}:${POSTGRES_PASSWORD:-lsa}@postgres:5432/${POSTGRES_DB:-lsa}
+    TEMPORAL_ADDRESS: temporal:7233
+    WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+    NODE_ENV: production
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -10,11 +24,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lsa}
       POSTGRES_DB: ${POSTGRES_DB:-lsa}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lsa} -d ${POSTGRES_DB:-lsa}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-lsa} -d ${POSTGRES_DB:-lsa}']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -33,21 +47,76 @@ services:
       POSTGRES_SEEDS: postgres
       DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
     ports:
-      - "${TEMPORAL_PORT:-7233}:7233"
+      - '${TEMPORAL_PORT:-7233}:7233'
     healthcheck:
-      test: ["CMD-SHELL", "tctl --address temporal:7233 cluster health | grep -q SERVING"]
+      test: ['CMD-SHELL', 'tctl --address temporal:7233 cluster health | grep -q SERVING']
       interval: 10s
       timeout: 5s
       retries: 30
 
   temporal-ui:
     image: temporalio/ui:2.39.0
-    profiles: ["ui"]
+    profiles: ['ui']
     depends_on: [temporal]
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
-      - "8233:8080"
+      - '8233:8080'
+
+  # ------------------------------------------------------------ application
+  migrate:
+    profiles: ['app']
+    build: { context: .., target: api, args: { NODE_IMAGE: '${NODE_IMAGE:-node:22-bookworm-slim}' } }
+    image: lsa-api
+    <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Applies migrations, then creates the first administrator if there are no users.
+    command:
+      ['sh', '-c', 'node node_modules/@lsa/db/dist/migrate.js && node node_modules/@lsa/db/dist/seed.js']
+    restart: 'no'
+
+  api:
+    profiles: ['app']
+    image: lsa-api
+    <<: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    profiles: ['app']
+    build: { context: .., target: worker, args: { NODE_IMAGE: '${NODE_IMAGE:-node:22-bookworm-slim}' } }
+    image: lsa-worker
+    <<: *app-env
+    hostname: lsa-worker-1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    volumes:
+      - workspaces:/data/workspaces
+    restart: unless-stopped
+
+  web:
+    profiles: ['app']
+    build:
+      context: ..
+      target: web
+      args: { NODE_IMAGE: '${NODE_IMAGE:-node:22-bookworm-slim}', API_INTERNAL_URL: 'http://api:4000' }
+    image: lsa-web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  workspaces:

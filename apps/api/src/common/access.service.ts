@@ -31,9 +31,23 @@ export class AccessService {
     return role;
   }
 
-  /** Project ids the user can see. `null` means all (workspace admin). */
-  async visibleProjectIds(user: SessionUser): Promise<string[] | null> {
-    if (user.isAdmin) return null;
+  /**
+   * Projects whose work the user sees in cross-project views; null means "no restriction".
+   * Archived projects are left out of working views; the audit log passes includeArchived
+   * so administrators keep the complete history.
+   */
+  async visibleProjectIds(
+    user: SessionUser,
+    opts: { includeArchived?: boolean } = {},
+  ): Promise<string[] | null> {
+    if (user.isAdmin) {
+      if (opts.includeArchived) return null;
+      const rows = await this.database.db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(isNull(projects.archivedAt));
+      return rows.map((r) => r.id);
+    }
     const rows = await this.database.db
       .select({ id: projectMembers.projectId })
       .from(projectMembers)

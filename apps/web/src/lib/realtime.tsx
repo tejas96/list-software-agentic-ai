@@ -5,7 +5,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { io, type Socket } from 'socket.io-client';
 import type { RealtimeEvent } from '@lsa/contracts';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? 'http://localhost:4000';
+/** Same origin by default (proxied by Next); set NEXT_PUBLIC_SOCKET_URL only to reach the API directly. */
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || undefined;
 
 interface RealtimeCtx {
   socket: Socket | null;

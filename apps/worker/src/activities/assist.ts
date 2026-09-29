@@ -22,19 +22,17 @@ export function assistActivities(deps: Deps) {
       costUsd: number;
     },
   ) =>
-    db
-      .insert(llmUsage)
-      .values({
-        projectId,
-        agentKey,
-        purpose,
-        model: u.model,
-        inputTokens: u.inputTokens,
-        outputTokens: u.outputTokens,
-        cacheReadTokens: u.cacheReadTokens,
-        cacheWriteTokens: u.cacheWriteTokens,
-        costUsd: u.costUsd,
-      });
+    db.insert(llmUsage).values({
+      projectId,
+      agentKey,
+      purpose,
+      model: u.model,
+      inputTokens: u.inputTokens,
+      outputTokens: u.outputTokens,
+      cacheReadTokens: u.cacheReadTokens,
+      cacheWriteTokens: u.cacheWriteTokens,
+      costUsd: u.costUsd,
+    });
 
   const mapLlmError = (err: unknown): never => {
     if (err instanceof LlmError) {

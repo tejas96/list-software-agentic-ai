@@ -10,9 +10,7 @@ export interface KnowledgeAccess {
     query: string,
     kind?: string,
   ): Promise<{ name: string; kind: string; path: string | null; summary: string | null; snippet: string }[]>;
-  object(
-    name: string,
-  ): Promise<{
+  object(name: string): Promise<{
     name: string;
     kind: string;
     path: string | null;
