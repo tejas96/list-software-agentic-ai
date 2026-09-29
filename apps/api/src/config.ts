@@ -13,6 +13,7 @@ const Env = z.object({
   TEMPORAL_TASK_QUEUE: z.string().default('lsa-sdlc'),
   ANTHROPIC_API_KEY: z.string().optional(),
   LLM_MODEL: z.string().default('claude-opus-5-5'),
+  LLM_REFUSAL_FALLBACK: z.string().default('true'),
   EMBEDDINGS_PROVIDER: z.enum(['none', 'voyage']).default('none'),
   VOYAGE_API_KEY: z.string().optional(),
   ORACLE_FORMS_BIN_DIR: z.string().optional(),

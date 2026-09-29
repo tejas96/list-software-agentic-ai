@@ -20,6 +20,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@lsa/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@lsa/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

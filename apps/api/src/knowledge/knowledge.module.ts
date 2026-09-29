@@ -2,19 +2,23 @@ import { Controller, Delete, Get, HttpCode, Injectable, Logger, Module, Post, Qu
 import { ApiTags } from '@nestjs/swagger';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import {
+  AskRequest,
   CreateCredentialRequest,
   CreateSourceRequest,
   KnowledgeSearchQuery,
+  type AskAnswerDto,
   type CodeObjectDto,
   type CredentialDto,
   type ObjectGraphDto,
   type SearchHitDto,
   type SourceDto,
 } from '@lsa/contracts';
-import { appendActivity, codeObjects, credentials, publish, SecretBox, sources } from '@lsa/db';
+import { appendActivity, codeObjects, credentials, llmUsage, publish, SecretBox, sources } from '@lsa/db';
+import { answerQuestion, LlmError, LlmGateway } from '@lsa/agents';
+import { knowledgeObjectByName, searchKnowledge } from '@lsa/domain';
 import { AccessService } from '../common/access.service.js';
 import { CurrentUser, type SessionUser } from '../common/auth.js';
-import { invalid, notFound } from '../common/errors.js';
+import { AppError, invalid, notFound, unavailable } from '../common/errors.js';
 import { UuidParam, ZBody, ZQuery } from '../common/zod.js';
 import { Database } from '../infra/database.js';
 import { TemporalService } from '../infra/temporal.service.js';
@@ -32,6 +36,7 @@ export class KnowledgeService {
     private readonly access: AccessService,
     private readonly temporal: TemporalService,
     private readonly box: SecretBox,
+    private readonly llm: LlmGateway,
   ) {}
 
   /* ------------------------------------------------------------- sources */
@@ -118,45 +123,48 @@ export class KnowledgeService {
 
   /* -------------------------------------------------------------- search */
 
-  /** Hybrid ranking: full-text on objects and code chunks, plus fuzzy name match. */
+  /** Hybrid ranking shared with the agents: full-text, fuzzy names and (when configured) vectors. */
   async search(user: SessionUser, q: KnowledgeSearchQuery): Promise<SearchHitDto[]> {
     await this.access.require(user, q.projectId, 'knowledge.query');
-    const res = await this.database.db.execute<{
-      id: string;
-      score: number;
-      snippet: string | null;
-    }>(sql`
-      with q as (select websearch_to_tsquery('simple', ${q.q}) as tsq, upper(${q.q}) as uq),
-      obj as (
-        select o.id,
-          ts_rank(o.search_vector, q.tsq) * 2 + similarity(o.name, q.uq) * 3 as score,
-          null::text as snippet
-        from code_objects o, q
-        where o.project_id = ${q.projectId}
-          ${q.kind ? sql`and o.kind = ${q.kind}` : sql``}
-          and (o.search_vector @@ q.tsq or o.name % q.uq or o.name ilike '%' || q.uq || '%')
-      ),
-      chk as (
-        select c.object_id as id,
-          max(ts_rank(c.search_vector, q.tsq)) as score,
-          (array_agg(ts_headline('simple', c.content, q.tsq, 'MaxFragments=1,MaxWords=30,MinWords=8') order by ts_rank(c.search_vector, q.tsq) desc))[1] as snippet
-        from chunks c join code_objects o on o.id = c.object_id, q
-        where c.project_id = ${q.projectId} and c.search_vector @@ q.tsq
-          ${q.kind ? sql`and o.kind = ${q.kind}` : sql``}
-        group by c.object_id
-      )
-      select id, sum(score)::float as score, max(snippet) as snippet
-      from (select * from obj union all select * from chk) u
-      group by id order by score desc limit ${q.limit}`);
-    if (res.rows.length === 0) return [];
-    const objs = await this.database.db
-      .select()
-      .from(codeObjects)
-      .where(sql`${codeObjects.id} in ${res.rows.map((r) => r.id)}`);
-    const byId = new Map(objs.map((o) => [o.id, o]));
-    return res.rows
-      .filter((r) => byId.has(r.id))
-      .map((r) => ({ object: toObjectDto(byId.get(r.id)!), snippet: r.snippet ?? byId.get(r.id)!.summary ?? '', score: Number(r.score) }));
+    const hits = await searchKnowledge(this.database.db, q.projectId, q.q, { kind: q.kind, limit: q.limit });
+    return hits.map((h) => ({
+      object: { id: h.id, kind: h.kind, name: h.name, path: h.path, language: null, summary: h.summary, metadata: h.metadata },
+      snippet: h.snippet,
+      score: h.score,
+    }));
+  }
+
+  /** Answer a question about the codebase from the knowledge graph, citing objects. */
+  async ask(user: SessionUser, req: AskRequest): Promise<AskAnswerDto> {
+    await this.access.require(user, req.projectId, 'knowledge.query');
+    if (!this.llm.available) throw unavailable('No LLM provider is configured. An administrator needs to set ANTHROPIC_API_KEY.');
+    const hits = await searchKnowledge(this.database.db, req.projectId, req.question.slice(0, 300), { limit: 8 });
+    const sources: { id: string; name: string; kind: string; path: string | null; text: string }[] = [];
+    for (const h of hits.slice(0, 6)) {
+      const o = await knowledgeObjectByName(this.database.db, req.projectId, h.name);
+      if (o) sources.push({ id: o.id, name: o.name, kind: o.kind, path: o.path, text: `${o.summary ?? ''}\n${o.content}` });
+    }
+    try {
+      const res = await answerQuestion(this.llm, { agent: 'legacy_intelligence', question: req.question, sources });
+      await this.database.db.insert(llmUsage).values({
+        projectId: req.projectId,
+        agentKey: 'legacy_intelligence',
+        purpose: 'knowledge_ask',
+        model: res.usage.model,
+        inputTokens: res.usage.inputTokens,
+        outputTokens: res.usage.outputTokens,
+        cacheReadTokens: res.usage.cacheReadTokens,
+        cacheWriteTokens: res.usage.cacheWriteTokens,
+        costUsd: res.usage.costUsd,
+      });
+      return {
+        answer: res.answer,
+        citations: sources.filter((s) => res.cited.includes(s.name)).map((s) => ({ objectId: s.id, name: s.name, path: s.path })),
+      };
+    } catch (err) {
+      if (err instanceof LlmError) throw new AppError(err.retryable ? 503 : 422, 'llm_error', err.message);
+      throw err;
+    }
   }
 
   /** An object with its neighbours up to `depth` hops, both directions. */
@@ -296,6 +304,12 @@ export class KnowledgeController {
   @Get('knowledge/search')
   search(@CurrentUser() user: SessionUser, @ZQuery(KnowledgeSearchQuery) q: KnowledgeSearchQuery) {
     return this.svc.search(user, q);
+  }
+
+  @Post('knowledge/ask')
+  @HttpCode(200)
+  ask(@CurrentUser() user: SessionUser, @ZBody(AskRequest) body: AskRequest) {
+    return this.svc.ask(user, body);
   }
 
   @Get('knowledge/objects/:id')

@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@lsa/agents": "workspace:*",
     "@lsa/contracts": "workspace:*",
     "@lsa/db": "workspace:*",
     "@lsa/domain": "workspace:*",
