@@ -17,11 +17,7 @@ export const RUN_DRIVEN_STATUSES: readonly TicketStatus[] = [
   'blocked',
 ];
 
-export const OPEN_STATUSES: readonly TicketStatus[] = [
-  'backlog',
-  'ready',
-  ...RUN_DRIVEN_STATUSES,
-];
+export const OPEN_STATUSES: readonly TicketStatus[] = ['backlog', 'ready', ...RUN_DRIVEN_STATUSES];
 
 export type MoveCheck = { ok: true } | { ok: false; reason: string };
 
@@ -29,7 +25,10 @@ export type MoveCheck = { ok: true } | { ok: false; reason: string };
 export function checkManualMove(from: TicketStatus, to: TicketStatus, hasActiveRun: boolean): MoveCheck {
   if (from === to) return { ok: true };
   if (hasActiveRun) {
-    return { ok: false, reason: 'A run is in progress on this ticket. Pause or cancel the run to change its status.' };
+    return {
+      ok: false,
+      reason: 'A run is in progress on this ticket. Pause or cancel the run to change its status.',
+    };
   }
   if (!MANUAL_STATUSES.includes(to)) {
     return { ok: false, reason: 'This column is updated by the agents while a run is in progress.' };

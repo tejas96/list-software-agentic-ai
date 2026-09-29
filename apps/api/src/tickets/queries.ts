@@ -1,12 +1,6 @@
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type {
-  ActivityDto,
-  CommentDto,
-  RunSummaryDto,
-  TicketSummaryDto,
-  UserRefDto,
-} from '@lsa/contracts';
+import type { ActivityDto, CommentDto, RunSummaryDto, TicketSummaryDto, UserRefDto } from '@lsa/contracts';
 import { resolveProjectSettings } from '@lsa/contracts';
 import { activities, gates, projects, runs, ticketComments, tickets, users, type Db } from '@lsa/db';
 
@@ -20,7 +14,11 @@ function ref(id: string | null, name: string | null, email: string | null): User
 }
 
 /** Select tickets as board cards. `where` is combined with any extra filters by the caller. */
-export async function selectTicketSummaries(db: Db, where: SQL | undefined, limit = 500): Promise<TicketSummaryDto[]> {
+export async function selectTicketSummaries(
+  db: Db,
+  where: SQL | undefined,
+  limit = 500,
+): Promise<TicketSummaryDto[]> {
   const rows = await db
     .select({
       t: tickets,
@@ -36,7 +34,9 @@ export async function selectTicketSummaries(db: Db, where: SQL | undefined, limi
       runStatus: activeRun.status,
       runStage: activeRun.currentStage,
       runWorkflow: activeRun.workflowType,
-      pendingGate: sql<string | null>`(select g.kind from ${gates} g where g.ticket_id = ${tickets.id} and g.status = 'pending' limit 1)`,
+      pendingGate: sql<
+        string | null
+      >`(select g.kind from ${gates} g where g.ticket_id = ${tickets.id} and g.status = 'pending' limit 1)`,
       commentCount: sql<number>`(select count(*)::int from ${ticketComments} c where c.ticket_id = ${tickets.id})`,
       childCount: sql<number>`(select count(*)::int from ${tickets} ch where ch.parent_id = ${tickets.id})`,
     })
@@ -80,7 +80,11 @@ export async function selectTicketSummaries(db: Db, where: SQL | undefined, limi
 
 const starter = alias(users, 'starter');
 
-export async function selectRunSummaries(db: Db, where: SQL | undefined, limit = 100): Promise<RunSummaryDto[]> {
+export async function selectRunSummaries(
+  db: Db,
+  where: SQL | undefined,
+  limit = 100,
+): Promise<RunSummaryDto[]> {
   const rows = await db
     .select({ r: runs, ticketKey: tickets.key, sId: starter.id, sName: starter.name, sEmail: starter.email })
     .from(runs)
@@ -108,7 +112,12 @@ export async function selectRunSummaries(db: Db, where: SQL | undefined, limit =
 
 const actor = alias(users, 'actor');
 
-export async function selectActivities(db: Db, where: SQL | undefined, limit = 300, newestFirst = false): Promise<ActivityDto[]> {
+export async function selectActivities(
+  db: Db,
+  where: SQL | undefined,
+  limit = 300,
+  newestFirst = false,
+): Promise<ActivityDto[]> {
   const rows = await db
     .select({ a: activities, ticketKey: tickets.key, uId: actor.id, uName: actor.name, uEmail: actor.email })
     .from(activities)
@@ -119,6 +128,8 @@ export async function selectActivities(db: Db, where: SQL | undefined, limit = 3
     .limit(limit);
   return rows.map((x) => ({
     id: x.a.id,
+    seq: Number(x.a.seq),
+    hash: x.a.hash,
     projectId: x.a.projectId ?? '',
     ticketId: x.a.ticketId,
     ticketKey: x.ticketKey,

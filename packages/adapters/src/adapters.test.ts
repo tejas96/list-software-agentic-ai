@@ -6,7 +6,11 @@ import { exec } from './process.js';
 import { normaliseStatement, OracleAdapter, OracleUnavailableError } from './oracle.js';
 import { Workspace, WorkspaceError } from './workspace.js';
 
-const policy = { allowedCommands: ['ls', 'git', 'node'], sandboxMode: 'local' as const, sandboxImage: 'node:22' };
+const policy = {
+  allowedCommands: ['ls', 'git', 'node'],
+  sandboxMode: 'local' as const,
+  sandboxImage: 'node:22',
+};
 
 describe('Workspace', () => {
   let root: string;
@@ -15,7 +19,10 @@ describe('Workspace', () => {
   beforeAll(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'lsa-ws-'));
     await mkdir(path.join(root, 'forms'));
-    await writeFile(path.join(root, 'forms', 'CUSTOMER.pkb'), 'create or replace package body pkg_customer as\nend;\n');
+    await writeFile(
+      path.join(root, 'forms', 'CUSTOMER.pkb'),
+      'create or replace package body pkg_customer as\nend;\n',
+    );
     await symlink('/etc', path.join(root, 'escape'));
     ws = new Workspace(root, policy);
   });
@@ -68,7 +75,8 @@ describe('Workspace git checkout', () => {
     base = await mkdtemp(path.join(tmpdir(), 'lsa-git-'));
     const origin = path.join(base, 'origin');
     await mkdir(origin);
-    const g = (args: string[], cwd = origin) => exec('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd });
+    const g = (args: string[], cwd = origin) =>
+      exec('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd });
     await g(['init', '-b', 'main']);
     await writeFile(path.join(origin, 'README.md'), 'hello\n');
     await g(['add', '.']);
@@ -102,6 +110,8 @@ describe('Oracle adapter', () => {
   it('normalises statements for the driver', () => {
     expect(normaliseStatement('select * from dual;')).toBe('select * from dual');
     expect(normaliseStatement('begin null; end;\n/')).toBe('begin null; end;');
-    expect(normaliseStatement('CREATE OR REPLACE PACKAGE p AS END p;')).toBe('CREATE OR REPLACE PACKAGE p AS END p;');
+    expect(normaliseStatement('CREATE OR REPLACE PACKAGE p AS END p;')).toBe(
+      'CREATE OR REPLACE PACKAGE p AS END p;',
+    );
   });
 });

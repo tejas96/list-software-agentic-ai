@@ -44,7 +44,10 @@ describe('PL/SQL scanner', () => {
 
   it('finds units, members, reads, writes and calls', () => {
     const units = parsePlsqlFile(PKG);
-    expect(units.map((u) => `${u.kind}:${u.name}`)).toEqual(['plsql_package:PKG_CUSTOMER', 'db_table:CUSTOMER']);
+    expect(units.map((u) => `${u.kind}:${u.name}`)).toEqual([
+      'plsql_package:PKG_CUSTOMER',
+      'db_table:CUSTOMER',
+    ]);
     const pkg = units[0]!;
     expect(pkg.schema).toBe('APP');
     expect(pkg.members).toEqual(['VALIDATE_ADDRESS', 'CREATE_CUSTOMER']);
@@ -57,7 +60,9 @@ describe('PL/SQL scanner', () => {
   });
 
   it('reads table columns', () => {
-    expect(parseColumns('create table t (a number(10) not null, b varchar2(20), constraint pk primary key (a))')).toEqual([
+    expect(
+      parseColumns('create table t (a number(10) not null, b varchar2(20), constraint pk primary key (a))'),
+    ).toEqual([
       { name: 'A', type: 'NUMBER(10)' },
       { name: 'B', type: 'VARCHAR2(20)' },
     ]);
@@ -142,7 +147,9 @@ describe('graph building', () => {
       'oracle_report:CUSTOMER_SUMMARY',
       'plsql_package:PKG_CUSTOMER',
     ]);
-    const formToPkg = g.refs.find((r) => r.from.name === 'CUSTOMER_ACCOUNT' && r.kind === 'calls' && r.toName === 'PKG_CUSTOMER');
+    const formToPkg = g.refs.find(
+      (r) => r.from.name === 'CUSTOMER_ACCOUNT' && r.kind === 'calls' && r.toName === 'PKG_CUSTOMER',
+    );
     expect(formToPkg).toBeDefined();
     const reportReads = g.refs.find((r) => r.from.name === 'CUSTOMER_SUMMARY' && r.kind === 'reads');
     expect(reportReads?.toName).toBe('CUSTOMER');
@@ -164,17 +171,54 @@ describe('importers', () => {
   it('imports the Oracle data dictionary', () => {
     const g = graphFromOracleMetadata({
       objects: [
-        { owner: 'APP', name: 'CUSTOMER', type: 'TABLE', status: 'VALID', source: null, columns: [{ name: 'ADDRESS', dataType: 'VARCHAR2', nullable: true }] },
-        { owner: 'APP', name: 'PKG_CUSTOMER', type: 'PACKAGE', status: 'VALID', source: 'PACKAGE pkg_customer AS PROCEDURE p; END;', columns: [] },
-        { owner: 'APP', name: 'PKG_CUSTOMER', type: 'PACKAGE BODY', status: 'INVALID', source: 'PACKAGE BODY pkg_customer AS PROCEDURE p IS BEGIN null; END; END;', columns: [] },
+        {
+          owner: 'APP',
+          name: 'CUSTOMER',
+          type: 'TABLE',
+          status: 'VALID',
+          source: null,
+          columns: [{ name: 'ADDRESS', dataType: 'VARCHAR2', nullable: true }],
+        },
+        {
+          owner: 'APP',
+          name: 'PKG_CUSTOMER',
+          type: 'PACKAGE',
+          status: 'VALID',
+          source: 'PACKAGE pkg_customer AS PROCEDURE p; END;',
+          columns: [],
+        },
+        {
+          owner: 'APP',
+          name: 'PKG_CUSTOMER',
+          type: 'PACKAGE BODY',
+          status: 'INVALID',
+          source: 'PACKAGE BODY pkg_customer AS PROCEDURE p IS BEGIN null; END; END;',
+          columns: [],
+        },
       ],
-      dependencies: [{ owner: 'APP', name: 'PKG_CUSTOMER', type: 'PACKAGE BODY', refOwner: 'APP', refName: 'CUSTOMER', refType: 'TABLE' }],
+      dependencies: [
+        {
+          owner: 'APP',
+          name: 'PKG_CUSTOMER',
+          type: 'PACKAGE BODY',
+          refOwner: 'APP',
+          refName: 'CUSTOMER',
+          refType: 'TABLE',
+        },
+      ],
     });
     expect(g.objects).toHaveLength(2);
     const pkg = g.objects.find((o) => o.kind === 'plsql_package')!;
     expect(pkg.metadata.invalid).toBe(true);
     expect(pkg.metadata.members).toEqual(['P']);
-    expect(g.refs).toEqual([{ from: { kind: 'plsql_package', name: 'PKG_CUSTOMER' }, toName: 'CUSTOMER', toKinds: ['db_table'], kind: 'reads' }]);
+    expect(g.refs).toEqual([
+      {
+        from: { kind: 'plsql_package', name: 'PKG_CUSTOMER' },
+        toName: 'CUSTOMER',
+        toKinds: ['db_table'],
+        kind: 'reads',
+      },
+    ]);
   });
 
   it('imports a Graphify node-link graph', () => {

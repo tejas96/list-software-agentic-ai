@@ -30,13 +30,21 @@ export class TemporalService implements OnApplicationShutdown {
     if (!this.connecting) {
       this.connecting = (async () => {
         try {
-          this.connection = await Connection.connect({ address: this.config.TEMPORAL_ADDRESS, connectTimeout: '5s' });
-          this.client = new Client({ connection: this.connection, namespace: this.config.TEMPORAL_NAMESPACE });
+          this.connection = await Connection.connect({
+            address: this.config.TEMPORAL_ADDRESS,
+            connectTimeout: '5s',
+          });
+          this.client = new Client({
+            connection: this.connection,
+            namespace: this.config.TEMPORAL_NAMESPACE,
+          });
           this.logger.log(`Connected to ${this.config.TEMPORAL_ADDRESS}`);
           return this.client;
         } catch (err) {
           this.connecting = null;
-          this.logger.warn(`Cannot reach Temporal at ${this.config.TEMPORAL_ADDRESS}: ${(err as Error).message}`);
+          this.logger.warn(
+            `Cannot reach Temporal at ${this.config.TEMPORAL_ADDRESS}: ${(err as Error).message}`,
+          );
           throw unavailable('The workflow engine is not reachable right now. Try again in a moment.');
         }
       })();

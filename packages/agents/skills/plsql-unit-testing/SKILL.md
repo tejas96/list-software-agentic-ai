@@ -6,6 +6,7 @@ description: Write and run automated database tests with utPLSQL or plain PL/SQL
 # PL/SQL unit testing
 
 ## With utPLSQL (if installed in the sandbox)
+
 ```sql
 create or replace package test_pkg_customer as
   --%suite(PKG_CUSTOMER)
@@ -20,10 +21,13 @@ create or replace package test_pkg_customer as
 end;
 /
 ```
+
 Run with `oracle_run_sql`: `begin ut.run('test_pkg_customer'); end;` and read the output (or query `ut3` results). Tests roll back automatically.
 
 ## Without utPLSQL
+
 Write `tests/db/test_<object>.sql` as an anonymous block:
+
 ```sql
 declare
   l_id customer.customer_id%type;
@@ -44,6 +48,7 @@ end;
 ```
 
 ## Rules
+
 - Test data is synthetic and obviously fake ("Test Person"), never copied from real customers.
 - Each test cleans up (rollback) so tests are independent and re-runnable.
 - A test that cannot run (no sandbox, missing grant) is `blocked`, not `passed`. Say what is missing.

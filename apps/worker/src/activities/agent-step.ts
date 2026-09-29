@@ -1,7 +1,15 @@
 import { ApplicationFailure, Context, heartbeat } from '@temporalio/activity';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { runAgentTask, LlmError, type KnowledgeAccess, type TaskContext } from '@lsa/agents';
-import { AGENTS, ARTIFACT_LABELS, STAGE_KEYS, TASKS, type AgentTask, type ArtifactKind, type StageKey } from '@lsa/contracts';
+import {
+  AGENTS,
+  ARTIFACT_LABELS,
+  STAGE_KEYS,
+  TASKS,
+  type AgentTask,
+  type ArtifactKind,
+  type StageKey,
+} from '@lsa/contracts';
 import { appendActivity, artifacts, llmUsage, projects, publish, runs, runSteps, tickets } from '@lsa/db';
 import { knowledgeDependencies, knowledgeObjectByName, searchKnowledge } from '@lsa/domain';
 import type { Deps } from '../deps.js';
@@ -27,14 +35,26 @@ export interface AgentStepResult {
   commit: string | null;
 }
 
-const WRITES_FILES: AgentTask[] = ['implement_change', 'implement_db_change', 'run_tests', 'fix_failures', 'reproduce_defect'];
+const WRITES_FILES: AgentTask[] = [
+  'implement_change',
+  'implement_db_change',
+  'run_tests',
+  'fix_failures',
+  'reproduce_defect',
+];
 
 export function agentStepActivities(deps: Deps) {
   const { db } = deps;
 
   const knowledgeFor = (projectId: string): KnowledgeAccess => ({
     search: async (q, kind) =>
-      (await searchKnowledge(db, projectId, q, { kind, limit: 15 })).map((h) => ({ name: h.name, kind: h.kind, path: h.path, summary: h.summary, snippet: h.snippet })),
+      (await searchKnowledge(db, projectId, q, { kind, limit: 15 })).map((h) => ({
+        name: h.name,
+        kind: h.kind,
+        path: h.path,
+        summary: h.summary,
+        snippet: h.snippet,
+      })),
     object: async (name) => knowledgeObjectByName(db, projectId, name),
     dependencies: (name, direction, depth) => knowledgeDependencies(db, projectId, name, direction, depth),
   });
@@ -46,7 +66,8 @@ export function agentStepActivities(deps: Deps) {
       if (!run) throw ApplicationFailure.nonRetryable('Run not found', 'NotFound');
       const [ticket] = await db.select().from(tickets).where(eq(tickets.id, run.ticketId));
       const [project] = await db.select().from(projects).where(eq(projects.id, run.projectId));
-      if (!STAGE_KEYS.includes(input.stage)) throw ApplicationFailure.nonRetryable('Unknown stage', 'Invalid');
+      if (!STAGE_KEYS.includes(input.stage))
+        throw ApplicationFailure.nonRetryable('Unknown stage', 'Invalid');
 
       // A new attempt row for every execution (retries included), so the history is complete.
       const [prev] = await db
@@ -59,7 +80,17 @@ export function agentStepActivities(deps: Deps) {
       const step = await db.transaction(async (tx) => {
         const [s] = await tx
           .insert(runSteps)
-          .values({ runId: run.id, stage: input.stage, task: input.task, agentKey: def.agent, title: def.title, status: 'running', attempt, startedAt: new Date(), currentAction: 'Starting' })
+          .values({
+            runId: run.id,
+            stage: input.stage,
+            task: input.task,
+            agentKey: def.agent,
+            title: def.title,
+            status: 'running',
+            attempt,
+            startedAt: new Date(),
+            currentAction: 'Starting',
+          })
           .returning();
         await appendActivity(tx, {
           projectId: run.projectId,
@@ -71,13 +102,22 @@ export function agentStepActivities(deps: Deps) {
           summary: `${AGENTS[def.agent].name} started: ${def.title}${attempt > 1 ? ` (attempt ${attempt})` : ''}`,
           data: { stepId: s!.id, task: input.task, attempt },
         });
-        await publish(tx, { type: 'step.changed', projectId: run.projectId, ticketId: run.ticketId, runId: run.id, stepId: s!.id });
+        await publish(tx, {
+          type: 'step.changed',
+          projectId: run.projectId,
+          ticketId: run.ticketId,
+          runId: run.id,
+          stepId: s!.id,
+        });
         return s!;
       });
 
       const fail = async (message: string) => {
         await db.transaction(async (tx) => {
-          await tx.update(runSteps).set({ status: 'failed', error: message, finishedAt: new Date(), currentAction: null }).where(eq(runSteps.id, step.id));
+          await tx
+            .update(runSteps)
+            .set({ status: 'failed', error: message, finishedAt: new Date(), currentAction: null })
+            .where(eq(runSteps.id, step.id));
           await appendActivity(tx, {
             projectId: run.projectId,
             ticketId: run.ticketId,
@@ -88,7 +128,13 @@ export function agentStepActivities(deps: Deps) {
             summary: `${AGENTS[def.agent].name} could not finish “${def.title}”: ${message}`,
             data: { stepId: step.id, task: input.task },
           });
-          await publish(tx, { type: 'step.changed', projectId: run.projectId, ticketId: run.ticketId, runId: run.id, stepId: step.id });
+          await publish(tx, {
+            type: 'step.changed',
+            projectId: run.projectId,
+            ticketId: run.ticketId,
+            runId: run.id,
+            stepId: step.id,
+          });
         });
       };
 
@@ -118,7 +164,12 @@ export function agentStepActivities(deps: Deps) {
           skills: deps.skills,
           signal,
           context: {
-            project: { key: project!.key, name: project!.name, clientName: project!.clientName, techStack: project!.techStack },
+            project: {
+              key: project!.key,
+              name: project!.name,
+              clientName: project!.clientName,
+              techStack: project!.techStack,
+            },
             ticket: {
               key: ticket!.key,
               type: ticket!.type,
@@ -150,8 +201,17 @@ export function agentStepActivities(deps: Deps) {
               if (now - lastProgress < 1500) return; // throttle UI updates
               lastProgress = now;
               await db.transaction(async (tx) => {
-                await tx.update(runSteps).set({ currentAction: action.slice(0, 300) }).where(eq(runSteps.id, step.id));
-                await publish(tx, { type: 'step.changed', projectId: run.projectId, ticketId: run.ticketId, runId: run.id, stepId: step.id });
+                await tx
+                  .update(runSteps)
+                  .set({ currentAction: action.slice(0, 300) })
+                  .where(eq(runSteps.id, step.id));
+                await publish(tx, {
+                  type: 'step.changed',
+                  projectId: run.projectId,
+                  ticketId: run.ticketId,
+                  runId: run.id,
+                  stepId: step.id,
+                });
               });
             },
           },
@@ -170,7 +230,10 @@ export function agentStepActivities(deps: Deps) {
                 cacheWriteTokens: u.cacheWriteTokens,
                 costUsd: u.costUsd,
               });
-              await tx.update(runSteps).set({ costUsd: sql`${runSteps.costUsd} + ${u.costUsd}` }).where(eq(runSteps.id, step.id));
+              await tx
+                .update(runSteps)
+                .set({ costUsd: sql`${runSteps.costUsd} + ${u.costUsd}` })
+                .where(eq(runSteps.id, step.id));
               return tx
                 .update(runs)
                 .set({
@@ -199,13 +262,25 @@ export function agentStepActivities(deps: Deps) {
 
         if (outcome.status === 'blocked') {
           await fail(outcome.reason);
-          return { status: 'blocked', artifactId: null, artifactKind: null, passed: null, approved: null, failures: [], needed: outcome.needed, reason: outcome.reason, commit: null };
+          return {
+            status: 'blocked',
+            artifactId: null,
+            artifactKind: null,
+            passed: null,
+            approved: null,
+            failures: [],
+            needed: outcome.needed,
+            reason: outcome.reason,
+            commit: null,
+          };
         }
 
         // Commit what the agent changed, so every step is a reviewable commit on the work branch.
         let commit: string | null = null;
         if (env.workspace && WRITES_FILES.includes(input.task)) {
-          commit = await env.workspace.commitAll(`${ticket!.key}: ${def.title}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+          commit = await env.workspace.commitAll(
+            `${ticket!.key}: ${def.title}${attempt > 1 ? ` (attempt ${attempt})` : ''}`,
+          );
         }
 
         const content = outcome.output as Record<string, unknown>;
@@ -233,7 +308,13 @@ export function agentStepActivities(deps: Deps) {
             .returning({ id: artifacts.id });
           await tx
             .update(runSteps)
-            .set({ status: 'succeeded', progress: 1, finishedAt: new Date(), currentAction: null, artifactId: a!.id })
+            .set({
+              status: 'succeeded',
+              progress: 1,
+              finishedAt: new Date(),
+              currentAction: null,
+              artifactId: a!.id,
+            })
             .where(eq(runSteps.id, step.id));
           await appendActivity(tx, {
             projectId: run.projectId,
@@ -243,7 +324,15 @@ export function agentStepActivities(deps: Deps) {
             agentKey: def.agent,
             type: 'artifact.created',
             summary: `${AGENTS[def.agent].name}: ${facts.headline}`,
-            data: { stepId: step.id, artifactId: a!.id, kind: outcome.kind, version, commit, turns: outcome.turns, toolCalls: outcome.toolCalls },
+            data: {
+              stepId: step.id,
+              artifactId: a!.id,
+              kind: outcome.kind,
+              version,
+              commit,
+              turns: outcome.turns,
+              toolCalls: outcome.toolCalls,
+            },
           });
           if (outcome.kind === 'test_results') {
             await appendActivity(tx, {
@@ -253,14 +342,32 @@ export function agentStepActivities(deps: Deps) {
               actorType: 'agent',
               agentKey: 'qa',
               type: facts.passed ? 'qa.passed' : 'qa.failed',
-              summary: facts.passed ? 'All automated tests passed' : `Tests failed: ${facts.failures.slice(0, 3).join('; ')}`,
+              summary: facts.passed
+                ? 'All automated tests passed'
+                : `Tests failed: ${facts.failures.slice(0, 3).join('; ')}`,
               data: { artifactId: a!.id },
             });
           }
-          await publish(tx, { type: 'step.changed', projectId: run.projectId, ticketId: run.ticketId, runId: run.id, stepId: step.id });
+          await publish(tx, {
+            type: 'step.changed',
+            projectId: run.projectId,
+            ticketId: run.ticketId,
+            runId: run.id,
+            stepId: step.id,
+          });
           return a!.id;
         });
-        return { status: 'completed', artifactId, artifactKind: outcome.kind, passed: facts.passed, approved: facts.approved, failures: facts.failures, needed: null, reason: null, commit };
+        return {
+          status: 'completed',
+          artifactId,
+          artifactKind: outcome.kind,
+          passed: facts.passed,
+          approved: facts.approved,
+          failures: facts.failures,
+          needed: null,
+          reason: null,
+          commit,
+        };
       } catch (err) {
         if (signal.aborted) {
           await fail('Cancelled');
@@ -282,40 +389,90 @@ export function agentStepActivities(deps: Deps) {
 }
 
 /** Facts the workflow needs, plus a one-line headline for the timeline. */
-function factsOf(kind: ArtifactKind, c: Record<string, unknown>): { headline: string; passed: boolean | null; approved: boolean | null; failures: string[] } {
+function factsOf(
+  kind: ArtifactKind,
+  c: Record<string, unknown>,
+): { headline: string; passed: boolean | null; approved: boolean | null; failures: string[] } {
   const base = { passed: null, approved: null, failures: [] as string[] };
   switch (kind) {
     case 'requirement_spec':
-      return { ...base, headline: `requirements ready with ${(c.acceptanceCriteria as unknown[]).length} acceptance criteria` };
+      return {
+        ...base,
+        headline: `requirements ready with ${(c.acceptanceCriteria as unknown[]).length} acceptance criteria`,
+      };
     case 'impact_map': {
       const comps = c.components as { name: string; changeType: string }[];
-      return { ...base, headline: `impact map: ${comps.filter((x) => x.changeType !== 'none').map((x) => x.name).slice(0, 6).join(', ') || 'no components'}` };
+      return {
+        ...base,
+        headline: `impact map: ${
+          comps
+            .filter((x) => x.changeType !== 'none')
+            .map((x) => x.name)
+            .slice(0, 6)
+            .join(', ') || 'no components'
+        }`,
+      };
     }
     case 'change_plan':
-      return { ...base, headline: `plan ready: ${(c.changes as unknown[]).length} change(s), ${String(c.complexity)} complexity` };
+      return {
+        ...base,
+        headline: `plan ready: ${(c.changes as unknown[]).length} change(s), ${String(c.complexity)} complexity`,
+      };
     case 'test_plan':
       return { ...base, headline: `test plan with ${(c.cases as unknown[]).length} test case(s)` };
     case 'code_change':
-      return { ...base, headline: `${(c.files as unknown[]).length} file(s) changed${c.compiled ? ', compiled' : ', NOT compiled'}` };
+      return {
+        ...base,
+        headline: `${(c.files as unknown[]).length} file(s) changed${c.compiled ? ', compiled' : ', NOT compiled'}`,
+      };
     case 'db_change':
-      return { ...base, headline: c.needed ? `${(c.scripts as unknown[]).length} database script(s)${c.rollbackVerified ? ', rollback verified' : ''}` : 'no database change needed' };
+      return {
+        ...base,
+        headline: c.needed
+          ? `${(c.scripts as unknown[]).length} database script(s)${c.rollbackVerified ? ', rollback verified' : ''}`
+          : 'no database change needed',
+      };
     case 'test_results': {
-      const results = c.results as { caseId: string; title: string; status: string; details: string; failureCategory: string | null }[];
-      const failures = results.filter((r) => r.status === 'failed').map((r) => `${r.caseId} ${r.title} [${r.failureCategory ?? 'unclassified'}]: ${r.details}`);
+      const results = c.results as {
+        caseId: string;
+        title: string;
+        status: string;
+        details: string;
+        failureCategory: string | null;
+      }[];
+      const failures = results
+        .filter((r) => r.status === 'failed')
+        .map((r) => `${r.caseId} ${r.title} [${r.failureCategory ?? 'unclassified'}]: ${r.details}`);
       const passed = Boolean(c.passed) && failures.length === 0;
       const n = results.filter((r) => r.status === 'passed').length;
-      return { headline: `${n} of ${results.filter((r) => r.status !== 'skipped').length} tests passed`, passed, approved: null, failures };
+      return {
+        headline: `${n} of ${results.filter((r) => r.status !== 'skipped').length} tests passed`,
+        passed,
+        approved: null,
+        failures,
+      };
     }
     case 'review_report':
     case 'security_report': {
-      const findings = (c.findings as { severity: string; file: string | null; line: number | null; issue: string; recommendation: string }[]).filter(
-        (f) => f.severity === 'blocker' || f.severity === 'major',
-      );
+      const findings = (
+        c.findings as {
+          severity: string;
+          file: string | null;
+          line: number | null;
+          issue: string;
+          recommendation: string;
+        }[]
+      ).filter((f) => f.severity === 'blocker' || f.severity === 'major');
       return {
-        headline: c.approved ? `${kind === 'review_report' ? 'review' : 'security check'} approved` : `${findings.length} blocking finding(s)`,
+        headline: c.approved
+          ? `${kind === 'review_report' ? 'review' : 'security check'} approved`
+          : `${findings.length} blocking finding(s)`,
         passed: null,
         approved: Boolean(c.approved) && findings.length === 0,
-        failures: findings.map((f) => `[${f.severity}] ${f.file ?? ''}${f.line ? `:${f.line}` : ''} ${f.issue} → ${f.recommendation}`),
+        failures: findings.map(
+          (f) =>
+            `[${f.severity}] ${f.file ?? ''}${f.line ? `:${f.line}` : ''} ${f.issue} → ${f.recommendation}`,
+        ),
       };
     }
     case 'release_package':

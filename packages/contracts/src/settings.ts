@@ -8,9 +8,7 @@ export const ProjectSettings = z.object({
   autoStartOnReady: z.boolean().default(false),
   /** Run triage (classification, acceptance criteria draft, duplicate check) on every new ticket. */
   autoTriage: z.boolean().default(true),
-  workflowByType: z
-    .record(TicketType, WorkflowType)
-    .default({ ...DEFAULT_WORKFLOW_BY_TYPE }),
+  workflowByType: z.record(TicketType, WorkflowType).default({ ...DEFAULT_WORKFLOW_BY_TYPE }),
   gates: z
     .object({ plan: z.boolean().default(true), release: z.boolean().default(true) })
     .default({ plan: true, release: true }),
@@ -25,7 +23,23 @@ export const ProjectSettings = z.object({
   /** Commands agents may run in the sandbox (prefix match on the executable). */
   allowedCommands: z
     .array(z.string().min(1))
-    .default(['git', 'ls', 'cat', 'grep', 'find', 'npm', 'pnpm', 'node', 'sqlplus', 'sql', 'utplsql', 'frmcmp_batch', 'frmf2xml', 'frmxml2f', 'rwconverter']),
+    .default([
+      'git',
+      'ls',
+      'cat',
+      'grep',
+      'find',
+      'npm',
+      'pnpm',
+      'node',
+      'sqlplus',
+      'sql',
+      'utplsql',
+      'frmcmp_batch',
+      'frmf2xml',
+      'frmxml2f',
+      'rwconverter',
+    ]),
   /** Command used by QA to run the project's automated tests, if the repository has one. */
   testCommand: z.string().nullable().default(null),
   /** Command used to build or compile the project in the sandbox, if any. */

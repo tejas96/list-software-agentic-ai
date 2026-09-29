@@ -13,7 +13,13 @@ export interface FormBlock {
   name: string;
   dataSource: string | null;
   dmlTarget: string | null;
-  items: { name: string; column: string | null; type: string | null; dataType: string | null; maxLength: string | null }[];
+  items: {
+    name: string;
+    column: string | null;
+    type: string | null;
+    dataType: string | null;
+    maxLength: string | null;
+  }[];
 }
 
 export interface ParsedForm {
@@ -53,7 +59,12 @@ export function parseFormXml(xml: string, fallbackName: string): ParsedForm | nu
   const collect = (node: XmlNode, scope: string) => {
     for (const c of node.children) {
       if (c.name === 'Trigger') {
-        triggers.push({ name: upper(attr(c, 'Name'))!, scope, text: attr(c, 'TriggerText') ?? deepText(c), line: c.line });
+        triggers.push({
+          name: upper(attr(c, 'Name'))!,
+          scope,
+          text: attr(c, 'TriggerText') ?? deepText(c),
+          line: c.line,
+        });
       } else if (c.name === 'Block') collect(c, `BLOCK ${upper(attr(c, 'Name'))}`);
       else if (c.name === 'Item') collect(c, `${scope} ITEM ${upper(attr(c, 'Name'))}`);
       else if (c.name !== 'ProgramUnit') collect(c, scope);
@@ -67,11 +78,23 @@ export function parseFormXml(xml: string, fallbackName: string): ParsedForm | nu
     text: attr(p, 'ProgramUnitText') ?? deepText(p),
     line: p.line,
   }));
-  const recordGroups = findAll(form, 'RecordGroup').map((r) => ({ name: upper(attr(r, 'Name'))!, query: attr(r, 'RecordGroupQuery') ?? null }));
-  const lovs = findAll(form, 'LOV').map((l) => ({ name: upper(attr(l, 'Name'))!, recordGroup: upper(attr(l, 'RecordGroupName')) }));
-  const libraries = findAll(form, 'AttachedLibrary').map((l) => attr(l, 'Name') ?? '').filter(Boolean);
+  const recordGroups = findAll(form, 'RecordGroup').map((r) => ({
+    name: upper(attr(r, 'Name'))!,
+    query: attr(r, 'RecordGroupQuery') ?? null,
+  }));
+  const lovs = findAll(form, 'LOV').map((l) => ({
+    name: upper(attr(l, 'Name'))!,
+    recordGroup: upper(attr(l, 'RecordGroupName')),
+  }));
+  const libraries = findAll(form, 'AttachedLibrary')
+    .map((l) => attr(l, 'Name') ?? '')
+    .filter(Boolean);
 
-  const code = [...triggers.map((t) => t.text), ...programUnits.map((p) => p.text), ...recordGroups.map((r) => r.query ?? '')].join(';\n');
+  const code = [
+    ...triggers.map((t) => t.text),
+    ...programUnits.map((p) => p.text),
+    ...recordGroups.map((r) => r.query ?? ''),
+  ].join(';\n');
   const refs = extractReferences(code);
   const ownUnits = new Set(programUnits.map((p) => p.name));
   const reads = new Set(refs.reads);
@@ -116,14 +139,35 @@ export function parseReportXml(xml: string, fallbackName: string): ParsedReport 
     const select = findAll(ds, 'select')[0];
     return { name: upper(attr(ds, 'name')) ?? 'QUERY', sql: select ? deepText(select).trim() : '' };
   });
-  const dataItems = findAll(report, 'dataItem').map((d) => upper(attr(d, 'name'))!).filter(Boolean);
-  const fields = findAll(report, 'field').map((f) => ({ name: upper(attr(f, 'name'))!, source: upper(attr(f, 'source')) }));
-  const parameters = [...findAll(report, 'userParameter'), ...findAll(report, 'systemParameter')].map((p) => upper(attr(p, 'name'))!).filter(Boolean);
-  const programUnits = [...findAll(report, 'function'), ...findAll(report, 'procedure'), ...findAll(report, 'packageBody')].map((p) => ({
+  const dataItems = findAll(report, 'dataItem')
+    .map((d) => upper(attr(d, 'name'))!)
+    .filter(Boolean);
+  const fields = findAll(report, 'field').map((f) => ({
+    name: upper(attr(f, 'name'))!,
+    source: upper(attr(f, 'source')),
+  }));
+  const parameters = [...findAll(report, 'userParameter'), ...findAll(report, 'systemParameter')]
+    .map((p) => upper(attr(p, 'name'))!)
+    .filter(Boolean);
+  const programUnits = [
+    ...findAll(report, 'function'),
+    ...findAll(report, 'procedure'),
+    ...findAll(report, 'packageBody'),
+  ].map((p) => ({
     name: upper(attr(p, 'name')) ?? 'UNIT',
     text: deepText(p).trim(),
   }));
-  const refs = extractReferences([...queries.map((q) => q.sql), ...programUnits.map((p) => p.text)].join(';\n'));
+  const refs = extractReferences(
+    [...queries.map((q) => q.sql), ...programUnits.map((p) => p.text)].join(';\n'),
+  );
   const own = new Set(programUnits.map((p) => p.name));
-  return { name, queries, dataItems, fields, parameters, programUnits, refs: { ...refs, calls: refs.calls.filter((c) => !own.has(c)) } };
+  return {
+    name,
+    queries,
+    dataItems,
+    fields,
+    parameters,
+    programUnits,
+    refs: { ...refs, calls: refs.calls.filter((c) => !own.has(c)) },
+  };
 }

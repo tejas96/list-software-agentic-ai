@@ -14,7 +14,9 @@ const KEYWORDS = new Set(
   USER ROWNUM ROWID LEVEL PRIOR CONNECT START WITH GROUP ORDER HAVING UNION ALL MINUS INTERSECT DISTINCT BETWEEN LIKE EXISTS ANY SOME JOIN LEFT RIGHT
   INNER OUTER FULL CROSS NATURAL ASC DESC NVL NVL2 DECODE COALESCE TO_CHAR TO_DATE TO_NUMBER TRUNC ROUND SUBSTR INSTR LENGTH UPPER LOWER TRIM LTRIM
   RTRIM REPLACE COUNT SUM MIN MAX AVG FIRST LAST EXECUTE IMMEDIATE BULK COLLECT LIMIT FORALL PRAGMA AUTONOMOUS_TRANSACTION SQLCODE SQLERRM
-  DBMS_OUTPUT PUT_LINE RAISE_APPLICATION_ERROR NEW OLD CREATE REPLACE PACKAGE BODY PROCEDURE FUNCTION TRIGGER VIEW SEQUENCE DEFAULT CONSTANT`.split(/\s+/),
+  DBMS_OUTPUT PUT_LINE RAISE_APPLICATION_ERROR NEW OLD CREATE REPLACE PACKAGE BODY PROCEDURE FUNCTION TRIGGER VIEW SEQUENCE DEFAULT CONSTANT`.split(
+    /\s+/,
+  ),
 );
 
 /** Blank out comments and string literals but keep line structure, so line numbers stay correct. */
@@ -81,15 +83,21 @@ export function extractReferences(code: string): References {
   };
 
   // FROM a, b x JOIN c: capture the first table after FROM/JOIN and comma-separated followers.
-  for (const m of text.matchAll(new RegExp(`\\b(?:FROM|JOIN)\\s+${QUALIFIED}((?:\\s*(?:${ID})?\\s*,\\s*${QUALIFIED})*)`, 'gi'))) {
+  for (const m of text.matchAll(
+    new RegExp(`\\b(?:FROM|JOIN)\\s+${QUALIFIED}((?:\\s*(?:${ID})?\\s*,\\s*${QUALIFIED})*)`, 'gi'),
+  )) {
     add(reads, m[1], m[2]);
     const tail = m[3] ?? '';
     for (const t of tail.matchAll(new RegExp(`,\\s*${QUALIFIED}`, 'g'))) add(reads, t[1], t[2]);
   }
-  for (const m of text.matchAll(new RegExp(`\\bINSERT\\s+(?:ALL\\s+)?INTO\\s+${QUALIFIED}`, 'gi'))) add(writes, m[1], m[2]);
-  for (const m of text.matchAll(new RegExp(`\\bUPDATE\\s+${QUALIFIED}\\s+(?:${ID}\\s+)?SET\\b`, 'gi'))) add(writes, m[1], m[2]);
-  for (const m of text.matchAll(new RegExp(`\\bDELETE\\s+(?:FROM\\s+)?${QUALIFIED}`, 'gi'))) add(writes, m[1], m[2]);
-  for (const m of text.matchAll(new RegExp(`\\bMERGE\\s+INTO\\s+${QUALIFIED}`, 'gi'))) add(writes, m[1], m[2]);
+  for (const m of text.matchAll(new RegExp(`\\bINSERT\\s+(?:ALL\\s+)?INTO\\s+${QUALIFIED}`, 'gi')))
+    add(writes, m[1], m[2]);
+  for (const m of text.matchAll(new RegExp(`\\bUPDATE\\s+${QUALIFIED}\\s+(?:${ID}\\s+)?SET\\b`, 'gi')))
+    add(writes, m[1], m[2]);
+  for (const m of text.matchAll(new RegExp(`\\bDELETE\\s+(?:FROM\\s+)?${QUALIFIED}`, 'gi')))
+    add(writes, m[1], m[2]);
+  for (const m of text.matchAll(new RegExp(`\\bMERGE\\s+INTO\\s+${QUALIFIED}`, 'gi')))
+    add(writes, m[1], m[2]);
   for (const m of text.matchAll(new RegExp(`\\b${QUALIFIED}\\s*%\\s*(?:ROWTYPE|TYPE)\\b`, 'gi'))) {
     // table%ROWTYPE and table.column%TYPE both reference the table
     add(reads, undefined, m[1] ?? m[2]);
@@ -99,9 +107,18 @@ export function extractReferences(code: string): References {
   for (const m of text.matchAll(new RegExp(`\\b(${ID})\\s*\\.\\s*(${ID})\\s*(?=\\(|;)`, 'g'))) {
     const pkg = clean(m[1]);
     const proc = clean(m[2]);
-    if (pkg && proc && !KEYWORDS.has(pkg) && !KEYWORDS.has(proc) && !/^(DBMS_|UTL_|APEX_|OWA_|HTP|HTF)/.test(pkg)) calls.add(`${pkg}.${proc}`);
+    if (
+      pkg &&
+      proc &&
+      !KEYWORDS.has(pkg) &&
+      !KEYWORDS.has(proc) &&
+      !/^(DBMS_|UTL_|APEX_|OWA_|HTP|HTF)/.test(pkg)
+    )
+      calls.add(`${pkg}.${proc}`);
   }
-  for (const m of text.matchAll(new RegExp(`(?:^|[;\\n]|\\bTHEN|\\bELSE|\\bBEGIN|\\bLOOP)\\s*(${ID})\\s*\\(`, 'gi'))) {
+  for (const m of text.matchAll(
+    new RegExp(`(?:^|[;\\n]|\\bTHEN|\\bELSE|\\bBEGIN|\\bLOOP)\\s*(${ID})\\s*\\(`, 'gi'),
+  )) {
     const n = clean(m[1]);
     if (n && !KEYWORDS.has(n)) calls.add(n);
   }
@@ -138,7 +155,12 @@ export function parsePlsqlFile(source: string): ParsedUnit[] {
   const stripped = stripCommentsAndStrings(source);
   const starts: { index: number; type: string; schema: string | null; name: string }[] = [];
   for (const m of stripped.matchAll(UNIT_RE)) {
-    starts.push({ index: m.index!, type: m[1]!.toUpperCase().replace(/\s+/g, ' '), schema: clean(m[2]), name: clean(m[3])! });
+    starts.push({
+      index: m.index!,
+      type: m[1]!.toUpperCase().replace(/\s+/g, ' '),
+      schema: clean(m[2]),
+      name: clean(m[3])!,
+    });
   }
   const units: ParsedUnit[] = [];
   for (let i = 0; i < starts.length; i++) {
@@ -164,8 +186,12 @@ export function parsePlsqlFile(source: string): ParsedUnit[] {
     if (s.type === 'TABLE') {
       extra.columns = parseColumns(body);
     }
-    const refs = s.type === 'TABLE' || s.type === 'SEQUENCE' ? { reads: [], writes: [], calls: [] } : extractReferences(text);
-    if (s.type === 'TRIGGER' && extra.onTable) refs.reads = [...new Set([...refs.reads, extra.onTable as string])].sort();
+    const refs =
+      s.type === 'TABLE' || s.type === 'SEQUENCE'
+        ? { reads: [], writes: [], calls: [] }
+        : extractReferences(text);
+    if (s.type === 'TRIGGER' && extra.onTable)
+      refs.reads = [...new Set([...refs.reads, extra.onTable as string])].sort();
     units.push({
       kind,
       name: s.name,

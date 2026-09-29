@@ -13,7 +13,14 @@ export interface AgentCatalogEntry {
   toolGroups: ToolGroup[];
 }
 
-export const TOOL_GROUPS = ['knowledge', 'workspace_read', 'workspace_write', 'commands', 'oracle', 'git'] as const;
+export const TOOL_GROUPS = [
+  'knowledge',
+  'workspace_read',
+  'workspace_write',
+  'commands',
+  'oracle',
+  'git',
+] as const;
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 
 export const TOOL_GROUP_LABELS: Record<ToolGroup, string> = {
@@ -30,7 +37,8 @@ export const AGENTS: Record<AgentKey, AgentCatalogEntry> = {
     key: 'requirement_analyst',
     name: 'Requirement Analyst',
     shortName: 'Requirements',
-    description: 'Turns a request into clear requirements and testable acceptance criteria, and flags anything ambiguous.',
+    description:
+      'Turns a request into clear requirements and testable acceptance criteria, and flags anything ambiguous.',
     stage: 'understand',
     skills: ['requirements-engineering', 'banking-domain'],
     toolGroups: ['knowledge'],
@@ -48,7 +56,8 @@ export const AGENTS: Record<AgentKey, AgentCatalogEntry> = {
     key: 'legacy_intelligence',
     name: 'Legacy Intelligence',
     shortName: 'Legacy Intel',
-    description: 'Reads the legacy system and maps every component a change touches before anything is edited.',
+    description:
+      'Reads the legacy system and maps every component a change touches before anything is edited.',
     stage: 'analyse',
     skills: ['impact-analysis', 'oracle-forms', 'oracle-reports', 'plsql-engineering'],
     toolGroups: ['knowledge', 'workspace_read', 'oracle'],
@@ -59,7 +68,14 @@ export const AGENTS: Record<AgentKey, AgentCatalogEntry> = {
     shortName: 'Architect',
     description: 'Decides which components change, how, in what order, and which tests prove each change.',
     stage: 'plan',
-    skills: ['impact-analysis', 'oracle-schema-change', 'plsql-engineering', 'oracle-forms', 'oracle-reports', 'test-design'],
+    skills: [
+      'impact-analysis',
+      'oracle-schema-change',
+      'plsql-engineering',
+      'oracle-forms',
+      'oracle-reports',
+      'test-design',
+    ],
     toolGroups: ['knowledge', 'workspace_read'],
   },
   developer: {
@@ -84,7 +100,8 @@ export const AGENTS: Record<AgentKey, AgentCatalogEntry> = {
     key: 'qa',
     name: 'QA / Test Engineer',
     shortName: 'QA',
-    description: 'Works in every stage: writes tests from the acceptance criteria, runs them on each build and sends failures back to be fixed.',
+    description:
+      'Works in every stage: writes tests from the acceptance criteria, runs them on each build and sends failures back to be fixed.',
     stage: null,
     skills: ['test-design', 'plsql-unit-testing', 'failure-triage'],
     toolGroups: ['knowledge', 'workspace_read', 'workspace_write', 'commands', 'oracle'],
@@ -111,7 +128,8 @@ export const AGENTS: Record<AgentKey, AgentCatalogEntry> = {
     key: 'release',
     name: 'Release / DevOps',
     shortName: 'Release',
-    description: 'Packages the change set with deployment order and rollback plan, and hands it to your CI/CD.',
+    description:
+      'Packages the change set with deployment order and rollback plan, and hands it to your CI/CD.',
     stage: 'release',
     skills: ['release-packaging', 'evidence-pack'],
     toolGroups: ['workspace_read', 'git'],

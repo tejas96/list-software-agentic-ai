@@ -21,7 +21,17 @@ import {
   type TicketSummaryDto,
   type UpdateTicketRequest,
 } from '@lsa/contracts';
-import { activities, appendActivity, projects, publish, runs, ticketComments, tickets, users, type Db } from '@lsa/db';
+import {
+  activities,
+  appendActivity,
+  projects,
+  publish,
+  runs,
+  ticketComments,
+  tickets,
+  users,
+  type Db,
+} from '@lsa/db';
 import { createTicket, setTicketStatus, type NewTicket } from '@lsa/domain';
 import { AccessService } from '../common/access.service.js';
 import type { SessionUser } from '../common/auth.js';
@@ -29,7 +39,13 @@ import { conflict, invalid, notFound } from '../common/errors.js';
 import { Database } from '../infra/database.js';
 import { TemporalService } from '../infra/temporal.service.js';
 import { RunsService } from '../runs/runs.service.js';
-import { selectActivities, selectComments, selectRunSummaries, selectTicketSummaries, visibleProjects } from './queries.js';
+import {
+  selectActivities,
+  selectComments,
+  selectRunSummaries,
+  selectTicketSummaries,
+  visibleProjects,
+} from './queries.js';
 
 @Injectable()
 export class TicketsService {
@@ -93,13 +109,25 @@ export class TicketsService {
     await this.access.require(user, t.projectId, 'project.view');
     const [summary] = await selectTicketSummaries(this.db, eq(tickets.id, t.id), 1);
     const [parentRow] = t.parentId
-      ? await this.db.select({ id: tickets.id, key: tickets.key, title: tickets.title, status: tickets.status }).from(tickets).where(eq(tickets.id, t.parentId))
+      ? await this.db
+          .select({ id: tickets.id, key: tickets.key, title: tickets.title, status: tickets.status })
+          .from(tickets)
+          .where(eq(tickets.id, t.parentId))
       : [];
     const [dup] = t.duplicateOfId
-      ? await this.db.select({ id: tickets.id, key: tickets.key, title: tickets.title }).from(tickets).where(eq(tickets.id, t.duplicateOfId))
+      ? await this.db
+          .select({ id: tickets.id, key: tickets.key, title: tickets.title })
+          .from(tickets)
+          .where(eq(tickets.id, t.duplicateOfId))
       : [];
     const children = await this.db
-      .select({ id: tickets.id, key: tickets.key, title: tickets.title, status: tickets.status, type: tickets.type })
+      .select({
+        id: tickets.id,
+        key: tickets.key,
+        title: tickets.title,
+        status: tickets.status,
+        type: tickets.type,
+      })
       .from(tickets)
       .where(eq(tickets.parentId, t.id))
       .orderBy(asc(tickets.number));
@@ -140,7 +168,11 @@ export class TicketsService {
 
   /* ------------------------------------------------------------ commands */
 
-  async create(user: SessionUser, req: CreateTicketRequest, source: TicketSource = 'board'): Promise<TicketDto> {
+  async create(
+    user: SessionUser,
+    req: CreateTicketRequest,
+    source: TicketSource = 'board',
+  ): Promise<TicketDto> {
     await this.access.require(user, req.projectId, 'ticket.create');
     const settings = await this.settingsOf(req.projectId);
     if (req.assigneeId) await this.assertAssignable(req.projectId, req.assigneeId);
@@ -180,7 +212,15 @@ export class TicketsService {
     const { title, description } = splitRequest(req.text);
     return this.create(
       user,
-      { projectId: req.projectId, title, description, labels: [], acceptanceCriteria: [], status: req.startRun ? 'ready' : 'backlog', startRun: req.startRun },
+      {
+        projectId: req.projectId,
+        title,
+        description,
+        labels: [],
+        acceptanceCriteria: [],
+        status: req.startRun ? 'ready' : 'backlog',
+        startRun: req.startRun,
+      },
       'home',
     );
   }
@@ -191,7 +231,10 @@ export class TicketsService {
     const split = splitRequest(req.text);
     let reporterId: string | null = null;
     if (req.reporterEmail) {
-      const [u] = await this.db.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, req.reporterEmail.toLowerCase()));
+      const [u] = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(sql`lower(${users.email})`, req.reporterEmail.toLowerCase()));
       reporterId = u?.id ?? null;
     }
     if (req.externalRef) {
@@ -228,7 +271,10 @@ export class TicketsService {
       this.logger.warn(`Triage not started for ${ticketId}: ${(err as Error).message}`);
       await this.db
         .update(tickets)
-        .set({ triageState: 'skipped', triageNote: 'Triage did not run because the workflow engine was unreachable.' })
+        .set({
+          triageState: 'skipped',
+          triageNote: 'Triage did not run because the workflow engine was unreachable.',
+        })
         .where(eq(tickets.id, ticketId));
     }
   }
@@ -239,7 +285,8 @@ export class TicketsService {
     if (req.assigneeId) await this.assertAssignable(t.projectId, req.assigneeId);
     const changes: Record<string, unknown> = {};
     if (req.title !== undefined && req.title !== t.title) changes.title = req.title;
-    if (req.description !== undefined && req.description !== t.description) changes.description = req.description;
+    if (req.description !== undefined && req.description !== t.description)
+      changes.description = req.description;
     if (req.type !== undefined && req.type !== t.type) changes.type = req.type;
     if (req.priority !== undefined && req.priority !== t.priority) changes.priority = req.priority;
     if (req.assigneeId !== undefined && req.assigneeId !== t.assigneeId) changes.assigneeId = req.assigneeId;
@@ -254,7 +301,8 @@ export class TicketsService {
         .set({ ...changes, version: sql`${tickets.version} + 1` })
         .where(and(eq(tickets.id, t.id), eq(tickets.version, req.version)))
         .returning({ id: tickets.id });
-      if (!u) throw conflict('Someone else changed this ticket. Reload to see the latest version, then try again.');
+      if (!u)
+        throw conflict('Someone else changed this ticket. Reload to see the latest version, then try again.');
       await appendActivity(tx, {
         projectId: t.projectId,
         ticketId: t.id,
@@ -273,13 +321,20 @@ export class TicketsService {
   async move(user: SessionUser, idOrKey: string, req: MoveTicketRequest): Promise<TicketDto> {
     const t = await this.findRow(idOrKey);
     await this.access.require(user, t.projectId, 'ticket.move');
-    if (t.version !== req.version) throw conflict('Someone else changed this ticket. Reload the board and try again.');
+    if (t.version !== req.version)
+      throw conflict('Someone else changed this ticket. Reload the board and try again.');
     const check = checkManualMove(t.status, req.status, t.activeRunId !== null);
     if (!check.ok) throw invalid(check.reason);
     if (!BOARD_COLUMNS.includes(req.status) && req.status !== 'cancelled') throw invalid('Unknown column');
 
     await this.db.transaction(async (tx) => {
-      const rank = await this.rankAfter(tx as unknown as Db, t.projectId, req.status, req.afterId ?? null, t.id);
+      const rank = await this.rankAfter(
+        tx as unknown as Db,
+        t.projectId,
+        req.status,
+        req.afterId ?? null,
+        t.id,
+      );
       await setTicketStatus(tx, t.id, req.status, { type: 'user', userId: user.id }, { rank });
     });
 
@@ -290,18 +345,38 @@ export class TicketsService {
     return this.get(user, t.id);
   }
 
-  private async rankAfter(db: Db, projectId: string, status: string, afterId: string | null, selfId: string): Promise<number> {
-    const col = and(eq(tickets.projectId, projectId), eq(tickets.status, status as TicketDto['status']), ne(tickets.id, selfId));
+  private async rankAfter(
+    db: Db,
+    projectId: string,
+    status: string,
+    afterId: string | null,
+    selfId: string,
+  ): Promise<number> {
+    const col = and(
+      eq(tickets.projectId, projectId),
+      eq(tickets.status, status as TicketDto['status']),
+      ne(tickets.id, selfId),
+    );
     let before: number | null = null;
-    let after: number | null = null;
+    let after: number | null;
     if (afterId) {
       const [a] = await db.select({ rank: tickets.rank }).from(tickets).where(eq(tickets.id, afterId));
       if (!a) throw notFound('Neighbour ticket');
       before = a.rank;
-      const [n] = await db.select({ rank: tickets.rank }).from(tickets).where(and(col, gt(tickets.rank, a.rank))).orderBy(asc(tickets.rank)).limit(1);
+      const [n] = await db
+        .select({ rank: tickets.rank })
+        .from(tickets)
+        .where(and(col, gt(tickets.rank, a.rank)))
+        .orderBy(asc(tickets.rank))
+        .limit(1);
       after = n?.rank ?? null;
     } else {
-      const [first] = await db.select({ rank: tickets.rank }).from(tickets).where(col).orderBy(asc(tickets.rank)).limit(1);
+      const [first] = await db
+        .select({ rank: tickets.rank })
+        .from(tickets)
+        .where(col)
+        .orderBy(asc(tickets.rank))
+        .limit(1);
       after = first?.rank ?? null;
     }
     if (needsRebalance(before, after)) {
@@ -351,7 +426,10 @@ export class TicketsService {
     const t = await this.findRow(idOrKey);
     await this.access.require(user, t.projectId, 'ticket.edit');
     await this.db.transaction(async (tx) => {
-      await tx.update(tickets).set({ duplicateOfId: null, version: sql`${tickets.version} + 1` }).where(eq(tickets.id, t.id));
+      await tx
+        .update(tickets)
+        .set({ duplicateOfId: null, version: sql`${tickets.version} + 1` })
+        .where(eq(tickets.id, t.id));
       await appendActivity(tx, {
         projectId: t.projectId,
         ticketId: t.id,
@@ -369,7 +447,10 @@ export class TicketsService {
   /* ------------------------------------------------------------- helpers */
 
   private async settingsOf(projectId: string) {
-    const [p] = await this.db.select({ settings: projects.settings }).from(projects).where(eq(projects.id, projectId));
+    const [p] = await this.db
+      .select({ settings: projects.settings })
+      .from(projects)
+      .where(eq(projects.id, projectId));
     if (!p) throw notFound('Project');
     return resolveProjectSettings(p.settings);
   }
@@ -385,7 +466,10 @@ export class TicketsService {
   }
 
   private async assertSameProject(ticketId: string, projectId: string): Promise<void> {
-    const [p] = await this.db.select({ projectId: tickets.projectId }).from(tickets).where(eq(tickets.id, ticketId));
+    const [p] = await this.db
+      .select({ projectId: tickets.projectId })
+      .from(tickets)
+      .where(eq(tickets.id, ticketId));
     if (!p || p.projectId !== projectId) throw invalid('The parent ticket must be in the same project');
   }
 }
@@ -402,7 +486,10 @@ export function splitRequest(text: string): { title: string; description: string
 }
 
 function normaliseLabels(labels: string[]): string[] {
-  return [...new Set(labels.map((l) => l.trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean))].slice(0, 20);
+  return [...new Set(labels.map((l) => l.trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean))].slice(
+    0,
+    20,
+  );
 }
 
 function pick(obj: Record<string, unknown>, keys: string[]): Record<string, unknown> {
@@ -421,6 +508,7 @@ function describeFields(fields: string[]): string {
     acceptanceCriteria: 'the acceptance criteria',
   };
   const parts = fields.map((f) => names[f] ?? f);
-  return parts.length <= 1 ? (parts[0] ?? 'the ticket') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+  return parts.length <= 1
+    ? (parts[0] ?? 'the ticket')
+    : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }
-

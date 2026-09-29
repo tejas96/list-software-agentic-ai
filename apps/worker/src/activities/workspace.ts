@@ -24,7 +24,11 @@ export function slug(text: string): string {
     .replace(/-$/, '');
 }
 
-export async function decryptCredential(db: DbOrTx, box: SecretBox, credentialId: string | null | undefined): Promise<string | null> {
+export async function decryptCredential(
+  db: DbOrTx,
+  box: SecretBox,
+  credentialId: string | null | undefined,
+): Promise<string | null> {
   if (!credentialId) return null;
   const [c] = await db.select().from(credentials).where(eq(credentials.id, credentialId));
   if (!c) return null;
@@ -35,7 +39,10 @@ export async function decryptCredential(db: DbOrTx, box: SecretBox, credentialId
 /** The Git source agents work in: the configured one, else the project's first Git source. */
 export async function workSource(db: DbOrTx, projectId: string, settings: ProjectSettings) {
   if (settings.workSourceId) {
-    const [s] = await db.select().from(sources).where(and(eq(sources.id, settings.workSourceId), eq(sources.projectId, projectId)));
+    const [s] = await db
+      .select()
+      .from(sources)
+      .where(and(eq(sources.id, settings.workSourceId), eq(sources.projectId, projectId)));
     if (s) return s;
   }
   const [first] = await db
@@ -61,7 +68,13 @@ export interface RunEnvironment {
  * Check out (or reopen) the run's work branch and build the Oracle adapter.
  * Called on the worker that owns the run's workspace (host-specific queue).
  */
-export async function prepareRunEnvironment(db: DbOrTx, box: SecretBox, config: WorkerConfig, runId: string, needsWorkspace: boolean): Promise<RunEnvironment> {
+export async function prepareRunEnvironment(
+  db: DbOrTx,
+  box: SecretBox,
+  config: WorkerConfig,
+  runId: string,
+  needsWorkspace: boolean,
+): Promise<RunEnvironment> {
   const [run] = await db.select().from(runs).where(eq(runs.id, runId));
   if (!run) throw new Error(`Run ${runId} not found`);
   const [ticket] = await db.select().from(tickets).where(eq(tickets.id, run.ticketId));
@@ -78,11 +91,22 @@ export async function prepareRunEnvironment(db: DbOrTx, box: SecretBox, config: 
       sandbox = { connectString: sandboxCfg.connectString, user, password };
     }
   }
-  const oracle = new OracleAdapter({ formsBinDir: config.ORACLE_FORMS_BIN_DIR, reportsBinDir: config.ORACLE_REPORTS_BIN_DIR }, sandbox);
+  const oracle = new OracleAdapter(
+    { formsBinDir: config.ORACLE_FORMS_BIN_DIR, reportsBinDir: config.ORACLE_REPORTS_BIN_DIR },
+    sandbox,
+  );
 
   const src = await workSource(db, run.projectId, settings);
   if (!src || !needsWorkspace) {
-    return { workspace: null, branch: run.branch, baseRef: null, oracle, settings, gitToken: null, sourceUrl: null };
+    return {
+      workspace: null,
+      branch: run.branch,
+      baseRef: null,
+      oracle,
+      settings,
+      gitToken: null,
+      sourceUrl: null,
+    };
   }
   const cfg = src.config as { url: string; branch?: string };
   const token = await decryptCredential(db, box, src.credentialId);
@@ -102,5 +126,13 @@ export async function prepareRunEnvironment(db: DbOrTx, box: SecretBox, config: 
     },
   });
   if (!run.branch) await db.update(runs).set({ branch }).where(eq(runs.id, runId));
-  return { workspace, branch, baseRef: `origin/${base}`, oracle, settings, gitToken: token, sourceUrl: cfg.url };
+  return {
+    workspace,
+    branch,
+    baseRef: `origin/${base}`,
+    oracle,
+    settings,
+    gitToken: token,
+    sourceUrl: cfg.url,
+  };
 }

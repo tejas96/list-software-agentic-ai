@@ -85,7 +85,14 @@ export class SessionTokens {
     const claims = this.verify(token);
     if (!claims) return null;
     const [u] = await database.db
-      .select({ id: users.id, email: users.email, name: users.name, isAdmin: users.isAdmin, status: users.status, sv: users.sessionVersion })
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        isAdmin: users.isAdmin,
+        status: users.status,
+        sv: users.sessionVersion,
+      })
       .from(users)
       .where(eq(users.id, claims.sub));
     if (!u || u.status !== 'active' || u.sv !== claims.sv) return null;
@@ -104,7 +111,10 @@ export class AuthGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     if (ctx.getType() !== 'http') return true;
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
-    const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, [ctx.getHandler(), ctx.getClass()]);
+    const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
 
     const mutating = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     const hasCookie = Boolean(req.cookies?.[SESSION_COOKIE]);
@@ -113,11 +123,17 @@ export class AuthGuard implements CanActivate {
     }
 
     if (isPublic) return true;
-    const user = await this.tokens.resolve(this.database, req.cookies?.[SESSION_COOKIE] as string | undefined);
+    const user = await this.tokens.resolve(
+      this.database,
+      req.cookies?.[SESSION_COOKIE] as string | undefined,
+    );
     if (!user) throw new AppError(401, 'unauthenticated', 'Your session has ended. Sign in again.');
     req.user = user;
 
-    const adminOnly = this.reflector.getAllAndOverride<boolean>(ADMIN_KEY, [ctx.getHandler(), ctx.getClass()]);
+    const adminOnly = this.reflector.getAllAndOverride<boolean>(ADMIN_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
     if (adminOnly && !user.isAdmin) throw forbidden('Only workspace administrators can do this');
     return true;
   }

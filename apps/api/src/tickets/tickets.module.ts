@@ -1,4 +1,15 @@
-import { Controller, Get, Headers, HttpCode, Injectable, Module, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Injectable,
+  Module,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -51,13 +62,21 @@ export class TicketsController {
   }
 
   @Patch(':idOrKey')
-  update(@CurrentUser() user: SessionUser, @Param('idOrKey') idOrKey: string, @ZBody(UpdateTicketRequest) body: UpdateTicketRequest) {
+  update(
+    @CurrentUser() user: SessionUser,
+    @Param('idOrKey') idOrKey: string,
+    @ZBody(UpdateTicketRequest) body: UpdateTicketRequest,
+  ) {
     return this.svc.update(user, idOrKey, body);
   }
 
   @Post(':idOrKey/move')
   @HttpCode(200)
-  move(@CurrentUser() user: SessionUser, @Param('idOrKey') idOrKey: string, @ZBody(MoveTicketRequest) body: MoveTicketRequest) {
+  move(
+    @CurrentUser() user: SessionUser,
+    @Param('idOrKey') idOrKey: string,
+    @ZBody(MoveTicketRequest) body: MoveTicketRequest,
+  ) {
     return this.svc.move(user, idOrKey, body);
   }
 
@@ -78,7 +97,11 @@ export class TicketsController {
   }
 
   @Post(':idOrKey/comments')
-  addComment(@CurrentUser() user: SessionUser, @Param('idOrKey') idOrKey: string, @ZBody(CreateCommentRequest) body: CreateCommentRequest) {
+  addComment(
+    @CurrentUser() user: SessionUser,
+    @Param('idOrKey') idOrKey: string,
+    @ZBody(CreateCommentRequest) body: CreateCommentRequest,
+  ) {
     return this.svc.addComment(user, idOrKey, body);
   }
 }
@@ -94,7 +117,11 @@ export class IntakeTokens {
       .select({ id: projects.id, hash: projects.intakeTokenHash, archivedAt: projects.archivedAt })
       .from(projects)
       .where(eq(projects.key, projectKey.toUpperCase()));
-    const denied = new AppError(401, 'invalid_intake_token', 'The intake token is missing or not valid for this project');
+    const denied = new AppError(
+      401,
+      'invalid_intake_token',
+      'The intake token is missing or not valid for this project',
+    );
     if (!p?.hash || !token || p.archivedAt) throw denied;
     const given = Buffer.from(createHash('sha256').update(token).digest('hex'));
     const stored = Buffer.from(p.hash);

@@ -26,15 +26,23 @@ export class AuthService {
 
   async login(req: LoginRequest, ip: string | undefined): Promise<{ token: string; user: MeDto }> {
     const db = this.database.db;
-    const [u] = await db.select().from(users).where(eq(sql`lower(${users.email})`, req.email.toLowerCase()));
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(sql`lower(${users.email})`, req.email.toLowerCase()));
     const generic = new AppError(401, 'invalid_credentials', 'Email or password is not correct');
     if (!u) {
       await verifyPassword(await this.dummyHash, req.password);
       throw generic;
     }
-    if (u.status !== 'active') throw new AppError(403, 'account_disabled', 'This account is disabled. Contact an administrator.');
+    if (u.status !== 'active')
+      throw new AppError(403, 'account_disabled', 'This account is disabled. Contact an administrator.');
     if (u.lockedUntil && u.lockedUntil > new Date()) {
-      throw new AppError(423, 'account_locked', `Too many failed attempts. Try again after ${u.lockedUntil.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.`);
+      throw new AppError(
+        423,
+        'account_locked',
+        `Too many failed attempts. Try again after ${u.lockedUntil.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.`,
+      );
     }
     const ok = await verifyPassword(u.passwordHash, req.password);
     if (!ok) {
@@ -43,13 +51,17 @@ export class AuthService {
         .update(users)
         .set({
           failedLogins: failed >= MAX_FAILED_LOGINS ? 0 : failed,
-          lockedUntil: failed >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCK_MINUTES * 60_000) : u.lockedUntil,
+          lockedUntil:
+            failed >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCK_MINUTES * 60_000) : u.lockedUntil,
         })
         .where(eq(users.id, u.id));
       throw generic;
     }
     await db.transaction(async (tx) => {
-      await tx.update(users).set({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() }).where(eq(users.id, u.id));
+      await tx
+        .update(users)
+        .set({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() })
+        .where(eq(users.id, u.id));
       await appendActivity(tx, {
         projectId: null,
         actorType: 'user',
@@ -68,11 +80,19 @@ export class AuthService {
     const [u] = await db.select().from(users).where(eq(users.id, user.id));
     if (!u) throw new AppError(401, 'unauthenticated', 'Sign in to continue');
     const memberships = user.isAdmin
-      ? (await db.select({ id: projects.id, key: projects.key, name: projects.name }).from(projects).where(isNull(projects.archivedAt))).map(
-          (p) => ({ projectId: p.id, projectKey: p.key, projectName: p.name, role: 'admin' as const }),
-        )
+      ? (
+          await db
+            .select({ id: projects.id, key: projects.key, name: projects.name })
+            .from(projects)
+            .where(isNull(projects.archivedAt))
+        ).map((p) => ({ projectId: p.id, projectKey: p.key, projectName: p.name, role: 'admin' as const }))
       : await db
-          .select({ projectId: projects.id, projectKey: projects.key, projectName: projects.name, role: projectMembers.role })
+          .select({
+            projectId: projects.id,
+            projectKey: projects.key,
+            projectName: projects.name,
+            role: projectMembers.role,
+          })
           .from(projectMembers)
           .innerJoin(projects, eq(projects.id, projectMembers.projectId))
           .where(and(eq(projectMembers.userId, user.id), isNull(projects.archivedAt)));
@@ -85,10 +105,14 @@ export class AuthService {
     if (!u || !(await verifyPassword(u.passwordHash, req.currentPassword))) {
       throw invalid('Current password is not correct');
     }
-    if (req.currentPassword === req.newPassword) throw invalid('Choose a password different from the current one');
+    if (req.currentPassword === req.newPassword)
+      throw invalid('Choose a password different from the current one');
     const [updated] = await db
       .update(users)
-      .set({ passwordHash: await hashPassword(req.newPassword), sessionVersion: sql`${users.sessionVersion} + 1` })
+      .set({
+        passwordHash: await hashPassword(req.newPassword),
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+      })
       .where(eq(users.id, user.id))
       .returning({ sv: users.sessionVersion });
     return this.tokens.issue(user.id, updated!.sv);
@@ -108,7 +132,11 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
-  async login(@ZBody(LoginRequest) body: LoginRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<MeDto> {
+  async login(
+    @ZBody(LoginRequest) body: LoginRequest,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<MeDto> {
     const { token, user } = await this.auth.login(body, req.ip);
     this.tokens.setCookie(res, token);
     return user;

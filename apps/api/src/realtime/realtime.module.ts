@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, Module, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  Module,
+  type OnApplicationShutdown,
+  type OnModuleInit,
+} from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -31,7 +38,10 @@ function readCookie(header: string | undefined, name: string): string | undefine
  * see: `project:<id>`, `ticket:<id>`, `run:<id>`. Their own `user:<id>` room
  * (notifications) is joined automatically; `workspace` is for administrators.
  */
-@WebSocketGateway({ path: '/socket.io', cors: { origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000', credentials: true } })
+@WebSocketGateway({
+  path: '/socket.io',
+  cors: { origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000', credentials: true },
+})
 export class RealtimeGateway implements OnGatewayConnection {
   private readonly logger = new Logger('Realtime');
   @WebSocketServer() server!: Server;
@@ -56,7 +66,10 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   @SubscribeMessage('subscribe')
-  async subscribe(@ConnectedSocket() socket: Socket, @MessageBody() body: { room?: string }): Promise<{ ok: boolean }> {
+  async subscribe(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: { room?: string },
+  ): Promise<{ ok: boolean }> {
     const user = (socket.data as { user?: SessionUser }).user;
     const room = String(body?.room ?? '');
     if (!user) return { ok: false };
@@ -69,7 +82,10 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   @SubscribeMessage('unsubscribe')
-  async unsubscribe(@ConnectedSocket() socket: Socket, @MessageBody() body: { room?: string }): Promise<{ ok: boolean }> {
+  async unsubscribe(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: { room?: string },
+  ): Promise<{ ok: boolean }> {
     await socket.leave(String(body?.room ?? ''));
     return { ok: true };
   }
@@ -79,8 +95,12 @@ export class RealtimeGateway implements OnGatewayConnection {
     if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return null;
     const db = this.database.db;
     if (kind === 'project') return id;
-    if (kind === 'ticket') return (await db.select({ p: tickets.projectId }).from(tickets).where(eq(tickets.id, id)))[0]?.p ?? null;
-    if (kind === 'run') return (await db.select({ p: runs.projectId }).from(runs).where(eq(runs.id, id)))[0]?.p ?? null;
+    if (kind === 'ticket')
+      return (
+        (await db.select({ p: tickets.projectId }).from(tickets).where(eq(tickets.id, id)))[0]?.p ?? null
+      );
+    if (kind === 'run')
+      return (await db.select({ p: runs.projectId }).from(runs).where(eq(runs.id, id)))[0]?.p ?? null;
     return null;
   }
 

@@ -40,7 +40,12 @@ const quick = proxyActivities<SharedActivities>({
 const slow = proxyActivities<SharedActivities>({
   startToCloseTimeout: '2 hours',
   heartbeatTimeout: '10 minutes',
-  retry: { maximumAttempts: 3, initialInterval: '30s', backoffCoefficient: 2, nonRetryableErrorTypes: ['NotFound'] },
+  retry: {
+    maximumAttempts: 3,
+    initialInterval: '30s',
+    backoffCoefficient: 2,
+    nonRetryableErrorTypes: ['NotFound'],
+  },
 });
 
 export const gateDecision = defineSignal<[GateDecisionSignal]>(SIGNALS.gateDecision);
@@ -56,7 +61,13 @@ class RunCancelled extends Error {
 /* ------------------------------------------------------------ SDLC run */
 
 export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<string> {
-  const state: RunWorkflowState = { phase: 'running', stage: null, pendingGateId: null, qaAttempts: 0, planRevisions: 0 };
+  const state: RunWorkflowState = {
+    phase: 'running',
+    stage: null,
+    pendingGateId: null,
+    qaAttempts: 0,
+    planRevisions: 0,
+  };
   const decisions = new Map<string, GateDecisionSignal>();
   let paused = false;
   let cancel: { note: string | null } | null = null;
@@ -81,7 +92,12 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
     taskQueue: hostQueue,
     startToCloseTimeout: '3 hours',
     heartbeatTimeout: '5 minutes',
-    retry: { maximumAttempts: 3, initialInterval: '30s', backoffCoefficient: 2, nonRetryableErrorTypes: ['NotFound', 'PushFailed'] },
+    retry: {
+      maximumAttempts: 3,
+      initialInterval: '30s',
+      backoffCoefficient: 2,
+      nonRetryableErrorTypes: ['NotFound', 'PushFailed'],
+    },
   });
 
   const checkCancel = () => {
@@ -99,10 +115,15 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
   };
 
   /** Wait for a decision on a gate. Re-reads the gate row every few minutes in case a signal was lost. */
-  const waitForGate = async (gateId: string): Promise<{ decision: string; note: string | null; userId: string | null }> => {
+  const waitForGate = async (
+    gateId: string,
+  ): Promise<{ decision: string; note: string | null; userId: string | null }> => {
     state.pendingGateId = gateId;
     for (;;) {
-      const got = await condition(() => decisions.has(gateId) || cancel !== null || retryRequested !== null, '5 minutes');
+      const got = await condition(
+        () => decisions.has(gateId) || cancel !== null || retryRequested !== null,
+        '5 minutes',
+      );
       checkCancel();
       if (retryRequested) {
         const r = retryRequested as { userId: string };
@@ -135,7 +156,11 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
   };
 
   /** Run one agent task; on a blocker or repeated failure, ask a person and retry when they say so. */
-  const runTask = async (task: AgentTask, stage: StageDefinition['key'], feedback: string[]): Promise<AgentStepResult> => {
+  const runTask = async (
+    task: AgentTask,
+    stage: StageDefinition['key'],
+    feedback: string[],
+  ): Promise<AgentStepResult> => {
     for (;;) {
       await waitWhilePaused();
       checkCancel();
@@ -145,20 +170,26 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
         currentScope = new CancellationScope();
         result = await currentScope.run(() => host.runAgentStep({ runId, task, stage, feedback }));
       } catch (err) {
-        if (cancel || isCancellation(err)) throw new RunCancelled(cancel ? (cancel as { note: string | null }).note : null);
+        if (cancel || isCancellation(err))
+          throw new RunCancelled(cancel ? (cancel as { note: string | null }).note : null);
         failure = errorMessage(err);
       } finally {
         currentScope = null;
       }
       if (result?.status === 'completed') return result;
       const reason = result?.reason ?? failure ?? 'The step failed';
-      const needed = result?.needed ?? 'Check the error, fix the cause (configuration, access or inputs), then retry the run.';
+      const needed =
+        result?.needed ??
+        'Check the error, fix the cause (configuration, access or inputs), then retry the run.';
       log.warn('Step needs a person', { runId, task, reason });
       await escalate(`${TASKS[task].title}: ${reason}`, needed);
     }
   };
 
-  const runGroups = async (stage: StageDefinition, feedbackFor: (task: AgentTask) => string[]): Promise<AgentStepResult[]> => {
+  const runGroups = async (
+    stage: StageDefinition,
+    feedbackFor: (task: AgentTask) => string[],
+  ): Promise<AgentStepResult[]> => {
     const all: AgentStepResult[] = [];
     for (const group of stage.groups) {
       const results = await Promise.all(group.map((t) => runTask(t, stage.key, feedbackFor(t))));
@@ -188,7 +219,9 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
         );
         attemptsThisLoop = 0;
       }
-      fixFeedback = res.failures.length ? res.failures : ['Tests did not pass. Read the latest test results and fix the product defects.'];
+      fixFeedback = res.failures.length
+        ? res.failures
+        : ['Tests did not pass. Read the latest test results and fix the product defects.'];
       await runTask('fix_failures', 'build', fixFeedback);
     }
   };
@@ -200,7 +233,10 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
       const findings = results.filter((r) => r.approved === false).flatMap((r) => r.failures);
       if (findings.length === 0) return;
       if (cycle >= run.qaMaxAttempts) {
-        await escalate('Review or security findings remain after several fix cycles', 'Read the review and security reports, then retry or stop the run.');
+        await escalate(
+          'Review or security findings remain after several fix cycles',
+          'Read the review and security reports, then retry or stop the run.',
+        );
         cycle = 0;
       }
       await qaLoop(findings.map((f) => `Review finding: ${f}`));
@@ -222,14 +258,18 @@ export async function sdlcRunWorkflow({ runId }: RunWorkflowInput): Promise<stri
           const d = await waitForGate(gateId);
           state.phase = 'running';
           if (d.decision === 'approved') break;
-          if (d.decision === 'rejected') throw new RunCancelled(`Rejected at the ${stage.gateBefore} gate${d.note ? `: ${d.note}` : ''}`);
+          if (d.decision === 'rejected')
+            throw new RunCancelled(`Rejected at the ${stage.gateBefore} gate${d.note ? `: ${d.note}` : ''}`);
           if (d.decision === 'retry') continue;
           // Changes requested.
           const note = d.note ?? 'Changes requested';
           if (stage.gateBefore === 'plan' && planStage) {
             state.planRevisions = await quick.recordRevision(runId, 'planRevisions');
             if (state.planRevisions > run.maxPlanRevisions) {
-              await escalate(`The plan was sent back ${state.planRevisions} times`, 'Agree the approach with the team, update the ticket, then retry.');
+              await escalate(
+                `The plan was sent back ${state.planRevisions} times`,
+                'Agree the approach with the team, update the ticket, then retry.',
+              );
             }
             planFeedback.push(`Approver feedback on revision ${state.planRevisions}: ${note}`);
             await quick.enterStage(runId, 'plan', 'Plan (revision)');

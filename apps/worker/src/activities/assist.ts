@@ -9,8 +9,32 @@ import type { Deps } from '../deps.js';
 export function assistActivities(deps: Deps) {
   const { db, llm } = deps;
 
-  const recordUsage = (projectId: string, agentKey: AgentKey | null, purpose: string, u: { model: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number }) =>
-    db.insert(llmUsage).values({ projectId, agentKey, purpose, model: u.model, inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens, cacheWriteTokens: u.cacheWriteTokens, costUsd: u.costUsd });
+  const recordUsage = (
+    projectId: string,
+    agentKey: AgentKey | null,
+    purpose: string,
+    u: {
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+      costUsd: number;
+    },
+  ) =>
+    db
+      .insert(llmUsage)
+      .values({
+        projectId,
+        agentKey,
+        purpose,
+        model: u.model,
+        inputTokens: u.inputTokens,
+        outputTokens: u.outputTokens,
+        cacheReadTokens: u.cacheReadTokens,
+        cacheWriteTokens: u.cacheWriteTokens,
+        costUsd: u.costUsd,
+      });
 
   const mapLlmError = (err: unknown): never => {
     if (err instanceof LlmError) {
@@ -30,7 +54,10 @@ export function assistActivities(deps: Deps) {
       if (!t || t.triageState !== 'pending') return;
       if (!llm.available) {
         await db.transaction(async (tx) => {
-          await tx.update(tickets).set({ triageState: 'skipped', triageNote: 'Triage skipped: no LLM provider is configured.' }).where(eq(tickets.id, ticketId));
+          await tx
+            .update(tickets)
+            .set({ triageState: 'skipped', triageNote: 'Triage skipped: no LLM provider is configured.' })
+            .where(eq(tickets.id, ticketId));
           await publish(tx, { type: 'ticket.changed', projectId: t.projectId, ticketId });
         });
         return;
@@ -45,23 +72,50 @@ export function assistActivities(deps: Deps) {
             eq(tickets.projectId, t.projectId),
             ne(tickets.id, ticketId),
             notInArray(tickets.status, ['cancelled']),
-            sql`${tickets.searchVector} @@ websearch_to_tsquery('english', ${text.replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length > 3).slice(0, 12).join(' or ')})`,
+            sql`${tickets.searchVector} @@ websearch_to_tsquery('english', ${text
+              .replace(/[^\w\s]/g, ' ')
+              .split(/\s+/)
+              .filter((w) => w.length > 3)
+              .slice(0, 12)
+              .join(' or ')})`,
           ),
         )
-        .orderBy(desc(sql`ts_rank(${tickets.searchVector}, websearch_to_tsquery('english', ${text.replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length > 3).slice(0, 12).join(' or ')}))`))
+        .orderBy(
+          desc(
+            sql`ts_rank(${tickets.searchVector}, websearch_to_tsquery('english', ${text
+              .replace(/[^\w\s]/g, ' ')
+              .split(/\s+/)
+              .filter((w) => w.length > 3)
+              .slice(0, 12)
+              .join(' or ')}))`,
+          ),
+        )
         .limit(8);
-      const components = (await searchKnowledge(db, t.projectId, t.title, { limit: 12 })).map((h) => ({ name: h.name, kind: h.kind }));
+      const components = (await searchKnowledge(db, t.projectId, t.title, { limit: 12 })).map((h) => ({
+        name: h.name,
+        kind: h.kind,
+      }));
       let out;
       try {
         out = await triageTicket(llm, {
           project: { key: p!.key, name: p!.name, techStack: p!.techStack },
-          ticket: { key: t.key, title: t.title, description: t.description, type: t.type, priority: t.priority, hasCriteria: t.acceptanceCriteria.length > 0 },
+          ticket: {
+            key: t.key,
+            title: t.title,
+            description: t.description,
+            type: t.type,
+            priority: t.priority,
+            hasCriteria: t.acceptanceCriteria.length > 0,
+          },
           candidates,
           components,
         });
       } catch (err) {
         if (err instanceof LlmError && !err.retryable) {
-          await db.update(tickets).set({ triageState: 'failed', triageNote: `Triage failed: ${err.message}` }).where(eq(tickets.id, ticketId));
+          await db
+            .update(tickets)
+            .set({ triageState: 'failed', triageNote: `Triage failed: ${err.message}` })
+            .where(eq(tickets.id, ticketId));
           await publish(db, { type: 'ticket.changed', projectId: t.projectId, ticketId });
           return;
         }
@@ -77,11 +131,15 @@ export function assistActivities(deps: Deps) {
         await tx
           .update(tickets)
           .set({
-            ...(derived && current.version === t.version && { title: r.title, type: r.type, priority: r.priority }),
-            ...(current.acceptanceCriteria.length === 0 && r.acceptanceCriteria.length > 0 && {
-              acceptanceCriteria: r.acceptanceCriteria.map((text, i) => ({ id: `AC${i + 1}`, text })),
-            }),
-            labels: [...new Set([...current.labels, ...r.labels.map((l) => l.toLowerCase().replace(/\s+/g, '-'))])].slice(0, 20),
+            ...(derived &&
+              current.version === t.version && { title: r.title, type: r.type, priority: r.priority }),
+            ...(current.acceptanceCriteria.length === 0 &&
+              r.acceptanceCriteria.length > 0 && {
+                acceptanceCriteria: r.acceptanceCriteria.map((text, i) => ({ id: `AC${i + 1}`, text })),
+              }),
+            labels: [
+              ...new Set([...current.labels, ...r.labels.map((l) => l.toLowerCase().replace(/\s+/g, '-'))]),
+            ].slice(0, 20),
             duplicateOfId: dup?.id ?? null,
             triageState: 'done',
             triageNote: r.summary,
@@ -125,7 +183,10 @@ export function assistActivities(deps: Deps) {
       const [t] = await db.select().from(tickets).where(eq(tickets.id, c.ticketId));
       const post = async (body: string) =>
         db.transaction(async (tx) => {
-          const [reply] = await tx.insert(ticketComments).values({ ticketId: t!.id, authorType: 'agent', agentKey, body }).returning({ id: ticketComments.id });
+          const [reply] = await tx
+            .insert(ticketComments)
+            .values({ ticketId: t!.id, authorType: 'agent', agentKey, body })
+            .returning({ id: ticketComments.id });
           await appendActivity(tx, {
             projectId: t!.projectId,
             ticketId: t!.id,
@@ -135,13 +196,25 @@ export function assistActivities(deps: Deps) {
             summary: `${AGENTS[agentKey].name} replied`,
             data: { commentId: reply!.id, inReplyTo: commentId },
           });
-          await publish(tx, { type: 'comment.added', projectId: t!.projectId, ticketId: t!.id, commentId: reply!.id });
+          await publish(tx, {
+            type: 'comment.added',
+            projectId: t!.projectId,
+            ticketId: t!.id,
+            commentId: reply!.id,
+          });
           if (c.authorId) {
-            await notifyUsers(tx, [c.authorId], { type: 'comment.reply', title: `${AGENTS[agentKey].name} replied on ${t!.key}`, body: body.slice(0, 200), link: `/tickets/${t!.key}` });
+            await notifyUsers(tx, [c.authorId], {
+              type: 'comment.reply',
+              title: `${AGENTS[agentKey].name} replied on ${t!.key}`,
+              body: body.slice(0, 200),
+              link: `/tickets/${t!.key}`,
+            });
           }
         });
       if (!llm.available) {
-        await post('I can’t answer yet: no LLM provider is configured for this workspace. An administrator needs to set ANTHROPIC_API_KEY.');
+        await post(
+          'I can’t answer yet: no LLM provider is configured for this workspace. An administrator needs to set ANTHROPIC_API_KEY.',
+        );
         return;
       }
       const question = c.body.replace(/@[\w\-/]+/g, '').trim();
@@ -149,11 +222,27 @@ export function assistActivities(deps: Deps) {
       const sources = [];
       for (const h of hits.slice(0, 5)) {
         const o = await knowledgeObjectByName(db, t!.projectId, h.name);
-        if (o) sources.push({ name: o.name, kind: o.kind, path: o.path, text: `${o.summary ?? ''}\n${o.content}` });
+        if (o)
+          sources.push({
+            name: o.name,
+            kind: o.kind,
+            path: o.path,
+            text: `${o.summary ?? ''}\n${o.content}`,
+          });
       }
       const arts = t!.activeRunId
-        ? await db.select().from(artifacts).where(eq(artifacts.runId, t!.activeRunId)).orderBy(desc(artifacts.createdAt)).limit(6)
-        : await db.select().from(artifacts).where(eq(artifacts.ticketId, t!.id)).orderBy(desc(artifacts.createdAt)).limit(6);
+        ? await db
+            .select()
+            .from(artifacts)
+            .where(eq(artifacts.runId, t!.activeRunId))
+            .orderBy(desc(artifacts.createdAt))
+            .limit(6)
+        : await db
+            .select()
+            .from(artifacts)
+            .where(eq(artifacts.ticketId, t!.id))
+            .orderBy(desc(artifacts.createdAt))
+            .limit(6);
       try {
         const res = await answerQuestion(llm, {
           agent: agentKey,

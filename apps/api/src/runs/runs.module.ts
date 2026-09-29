@@ -1,12 +1,7 @@
-import { Controller, Get, HttpCode, Injectable, Logger, Module, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, Injectable, Logger, Module, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { and, eq, inArray } from 'drizzle-orm';
-import {
-  DecideGateRequest,
-  RunControlRequest,
-  StartRunRequest,
-  type GateDto,
-} from '@lsa/contracts';
+import { DecideGateRequest, RunControlRequest, StartRunRequest, type GateDto } from '@lsa/contracts';
 import { appendActivity, gates, publish } from '@lsa/db';
 import { AccessService } from '../common/access.service.js';
 import { CurrentUser, type SessionUser } from '../common/auth.js';
@@ -16,7 +11,11 @@ import { Database } from '../infra/database.js';
 import { TemporalService } from '../infra/temporal.service.js';
 import { RunsService } from './runs.service.js';
 
-const DECISION_LABEL = { approved: 'approved', changes_requested: 'sent back for changes', rejected: 'rejected' } as const;
+const DECISION_LABEL = {
+  approved: 'approved',
+  changes_requested: 'sent back for changes',
+  rejected: 'rejected',
+} as const;
 const GATE_LABEL = { plan: 'the change plan', release: 'the release', escalation: 'the escalation' } as const;
 
 @Injectable()
@@ -34,12 +33,18 @@ export class GatesService {
   async pending(user: SessionUser): Promise<GateDto[]> {
     const visible = await this.access.visibleProjectIds(user);
     if (visible !== null && visible.length === 0) return [];
-    const where = visible === null ? eq(gates.status, 'pending') : and(eq(gates.status, 'pending'), inArray(gates.projectId, visible));
+    const where =
+      visible === null
+        ? eq(gates.status, 'pending')
+        : and(eq(gates.status, 'pending'), inArray(gates.projectId, visible));
     return this.runsSvc.gatesFor(user, where!);
   }
 
   async get(user: SessionUser, gateId: string): Promise<GateDto> {
-    const [g] = await this.database.db.select({ projectId: gates.projectId }).from(gates).where(eq(gates.id, gateId));
+    const [g] = await this.database.db
+      .select({ projectId: gates.projectId })
+      .from(gates)
+      .where(eq(gates.id, gateId));
     if (!g) throw notFound('Approval');
     await this.access.require(user, g.projectId, 'project.view');
     const [dto] = await this.runsSvc.gatesFor(user, eq(gates.id, gateId));
@@ -77,12 +82,25 @@ export class GatesService {
         summary: `${user.name} ${DECISION_LABEL[req.decision]} ${GATE_LABEL[updated.kind]}${req.note ? `: ${req.note}` : ''}`,
         data: { gateId, kind: updated.kind, decision: req.decision, note: req.note ?? null },
       });
-      await publish(tx, { type: 'gate.changed', projectId: updated.projectId, ticketId: updated.ticketId, runId: updated.runId, gateId });
+      await publish(tx, {
+        type: 'gate.changed',
+        projectId: updated.projectId,
+        ticketId: updated.ticketId,
+        runId: updated.runId,
+        gateId,
+      });
     });
     try {
-      await this.temporal.signalGate(current.runId, { gateId, decision: req.decision, note: req.note ?? null, userId: user.id });
+      await this.temporal.signalGate(current.runId, {
+        gateId,
+        decision: req.decision,
+        note: req.note ?? null,
+        userId: user.id,
+      });
     } catch (err) {
-      this.logger.warn(`Gate ${gateId} decided but signal failed; workflow will reconcile: ${(err as Error).message}`);
+      this.logger.warn(
+        `Gate ${gateId} decided but signal failed; workflow will reconcile: ${(err as Error).message}`,
+      );
     }
     return this.get(user, gateId);
   }
@@ -98,6 +116,11 @@ export class RunsController {
     return this.svc.start(user, body);
   }
 
+  @Get()
+  recent(@CurrentUser() user: SessionUser, @Query('limit') limit?: string) {
+    return this.svc.listRecent(user, Number(limit ?? 50) || 50);
+  }
+
   @Get('active')
   active(@CurrentUser() user: SessionUser) {
     return this.svc.listActive(user);
@@ -110,7 +133,11 @@ export class RunsController {
 
   @Post(':id/control')
   @HttpCode(200)
-  control(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @ZBody(RunControlRequest) body: RunControlRequest) {
+  control(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(RunControlRequest) body: RunControlRequest,
+  ) {
     return this.svc.control(user, id, body.action, body.note ?? null);
   }
 }
@@ -143,7 +170,11 @@ export class GatesController {
 
   @Post(':id/decision')
   @HttpCode(200)
-  decide(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @ZBody(DecideGateRequest) body: DecideGateRequest) {
+  decide(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(DecideGateRequest) body: DecideGateRequest,
+  ) {
     return this.svc.decide(user, id, body);
   }
 }
@@ -154,4 +185,3 @@ export class GatesController {
   exports: [RunsService, GatesService],
 })
 export class RunsModule {}
-

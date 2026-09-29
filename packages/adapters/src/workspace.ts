@@ -21,7 +21,17 @@ export interface WorkspacePolicy {
   extraPath?: string[];
 }
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'target', 'bin', 'obj', '.idea', '.vscode']);
+const SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  '.next',
+  'dist',
+  'target',
+  'bin',
+  'obj',
+  '.idea',
+  '.vscode',
+]);
 const MAX_READ_BYTES = 400_000;
 
 /**
@@ -107,12 +117,19 @@ export class Workspace {
     return { files, truncated };
   }
 
-  async readFile(relPath: string, startLine?: number, endLine?: number): Promise<{ path: string; content: string; totalLines: number; truncated: boolean }> {
+  async readFile(
+    relPath: string,
+    startLine?: number,
+    endLine?: number,
+  ): Promise<{ path: string; content: string; totalLines: number; truncated: boolean }> {
     const abs = await this.resolve(relPath, true);
     const stat = await fs.stat(abs);
     if (!stat.isFile()) throw new WorkspaceError(`"${relPath}" is not a file`);
     const buf = await fs.readFile(abs);
-    if (isBinary(buf)) throw new WorkspaceError(`"${relPath}" is a binary file. Convert it first (for Oracle Forms use oracle_form_to_xml).`);
+    if (isBinary(buf))
+      throw new WorkspaceError(
+        `"${relPath}" is a binary file. Convert it first (for Oracle Forms use oracle_form_to_xml).`,
+      );
     const text = buf.toString('utf8');
     this.readHashes.set(abs, sha(text));
     const lines = text.split('\n');
@@ -136,7 +153,11 @@ export class Workspace {
     return fs.readFile(abs, 'utf8');
   }
 
-  async searchFiles(pattern: string, glob?: string, limit = 200): Promise<{ matches: { path: string; line: number; text: string }[]; truncated: boolean }> {
+  async searchFiles(
+    pattern: string,
+    glob?: string,
+    limit = 200,
+  ): Promise<{ matches: { path: string; line: number; text: string }[]; truncated: boolean }> {
     let re: RegExp;
     try {
       re = new RegExp(pattern, 'i');
@@ -188,10 +209,17 @@ export class Workspace {
     const current = await fs.readFile(abs, 'utf8');
     const known = this.readHashes.get(abs);
     if (!known) throw new WorkspaceError(`Read "${relPath}" before editing it.`);
-    if (known !== sha(current)) throw new WorkspaceError(`"${relPath}" changed since you read it. Read it again before editing.`);
+    if (known !== sha(current))
+      throw new WorkspaceError(`"${relPath}" changed since you read it. Read it again before editing.`);
     const first = current.indexOf(oldText);
-    if (oldText.length === 0 || first === -1) throw new WorkspaceError('The text to replace was not found. Copy it exactly from the file, without line numbers.');
-    if (current.indexOf(oldText, first + 1) !== -1) throw new WorkspaceError('The text to replace appears more than once. Include more surrounding lines to make it unique.');
+    if (oldText.length === 0 || first === -1)
+      throw new WorkspaceError(
+        'The text to replace was not found. Copy it exactly from the file, without line numbers.',
+      );
+    if (current.indexOf(oldText, first + 1) !== -1)
+      throw new WorkspaceError(
+        'The text to replace appears more than once. Include more surrounding lines to make it unique.',
+      );
     const next = current.slice(0, first) + newText + current.slice(first + oldText.length);
     await fs.writeFile(abs, next, 'utf8');
     this.readHashes.set(abs, sha(next));
@@ -209,17 +237,41 @@ export class Workspace {
     const base = path.basename(program);
     if (program !== base) throw new WorkspaceError('Give the program name only, without a path');
     if (!this.policy.allowedCommands.includes(base)) {
-      throw new WorkspaceError(`"${base}" is not an allowed command in this project. Allowed: ${this.policy.allowedCommands.join(', ')}`);
+      throw new WorkspaceError(
+        `"${base}" is not an allowed command in this project. Allowed: ${this.policy.allowedCommands.join(', ')}`,
+      );
     }
-    if (args.some((a) => typeof a !== 'string' || a.includes('\0'))) throw new WorkspaceError('Invalid argument');
-    if (base === 'git' && ['push', 'remote', 'config', 'credential', 'filter-branch'].includes(args[0] ?? '')) {
+    if (args.some((a) => typeof a !== 'string' || a.includes('\0')))
+      throw new WorkspaceError('Invalid argument');
+    if (
+      base === 'git' &&
+      ['push', 'remote', 'config', 'credential', 'filter-branch'].includes(args[0] ?? '')
+    ) {
       throw new WorkspaceError(`"git ${args[0]}" is handled by the platform, not by agents`);
     }
-    const PATH = [...(this.policy.extraPath ?? []), process.env.PATH ?? ''].filter(Boolean).join(path.delimiter);
+    const PATH = [...(this.policy.extraPath ?? []), process.env.PATH ?? '']
+      .filter(Boolean)
+      .join(path.delimiter);
     if (this.policy.sandboxMode === 'docker') {
       return exec(
         'docker',
-        ['run', '--rm', '--network', 'none', '--cpus', '2', '--memory', '2g', '-v', `${this.root}:/workspace`, '-w', '/workspace', this.policy.sandboxImage, base, ...args],
+        [
+          'run',
+          '--rm',
+          '--network',
+          'none',
+          '--cpus',
+          '2',
+          '--memory',
+          '2g',
+          '-v',
+          `${this.root}:/workspace`,
+          '-w',
+          '/workspace',
+          this.policy.sandboxImage,
+          base,
+          ...args,
+        ],
         { cwd: this.root, timeoutMs },
       );
     }
@@ -229,15 +281,28 @@ export class Workspace {
   /* ----------------------------------------------------------------- git */
 
   private git(args: string[], timeoutMs = 120_000): Promise<ExecResult> {
-    return exec('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=List Agentic Platform', '-c', 'user.email=agents@listsoftware.local', ...args], {
-      cwd: this.root,
-      timeoutMs,
-    });
+    return exec(
+      'git',
+      [
+        '-c',
+        'core.hooksPath=/dev/null',
+        '-c',
+        'user.name=List Agentic Platform',
+        '-c',
+        'user.email=agents@listsoftware.local',
+        ...args,
+      ],
+      {
+        cwd: this.root,
+        timeoutMs,
+      },
+    );
   }
 
   private async gitOk(args: string[], timeoutMs?: number): Promise<string> {
     const r = await this.git(args, timeoutMs);
-    if (r.exitCode !== 0) throw new WorkspaceError(`git ${args[0]} failed: ${(r.stderr || r.stdout).trim().slice(0, 1000)}`);
+    if (r.exitCode !== 0)
+      throw new WorkspaceError(`git ${args[0]} failed: ${(r.stderr || r.stdout).trim().slice(0, 1000)}`);
     return r.stdout.trim();
   }
 
@@ -286,7 +351,12 @@ export class Workspace {
     policy: WorkspacePolicy;
   }): Promise<Workspace> {
     const { dir, url, baseBranch, workBranch, token } = options;
-    const auth = token ? ['-c', `http.extraHeader=Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`] : [];
+    const auth = token
+      ? [
+          '-c',
+          `http.extraHeader=Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+        ]
+      : [];
     await fs.mkdir(path.dirname(dir), { recursive: true });
     const exists = await fs
       .access(path.join(dir, '.git'))
@@ -294,7 +364,12 @@ export class Workspace {
       .catch(() => false);
     const run = async (args: string[], cwd: string) => {
       const r = await exec('git', [...auth, ...args], { cwd, timeoutMs: 600_000 });
-      if (r.exitCode !== 0) throw new WorkspaceError(`git ${args[0]} failed: ${redact(r.stderr || r.stdout, token).trim().slice(0, 1500)}`);
+      if (r.exitCode !== 0)
+        throw new WorkspaceError(
+          `git ${args[0]} failed: ${redact(r.stderr || r.stdout, token)
+            .trim()
+            .slice(0, 1500)}`,
+        );
       return r.stdout.trim();
     };
     if (!exists) {
@@ -303,7 +378,8 @@ export class Workspace {
       await run(['fetch', 'origin', baseBranch], dir);
     }
     if (workBranch) {
-      const hasLocal = (await exec('git', ['rev-parse', '--verify', workBranch], { cwd: dir })).exitCode === 0;
+      const hasLocal =
+        (await exec('git', ['rev-parse', '--verify', workBranch], { cwd: dir })).exitCode === 0;
       if (hasLocal) await run(['checkout', workBranch], dir);
       else await run(['checkout', '-b', workBranch, `origin/${baseBranch}`], dir);
     } else {
@@ -314,9 +390,22 @@ export class Workspace {
 
   /** Push the work branch. Only the platform calls this, after the release gate. */
   async push(branch: string, token?: string | null): Promise<void> {
-    const auth = token ? ['-c', `http.extraHeader=Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`] : [];
-    const r = await exec('git', [...auth, 'push', '--set-upstream', 'origin', branch], { cwd: this.root, timeoutMs: 600_000 });
-    if (r.exitCode !== 0) throw new WorkspaceError(`git push failed: ${redact(r.stderr || r.stdout, token).trim().slice(0, 1500)}`);
+    const auth = token
+      ? [
+          '-c',
+          `http.extraHeader=Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+        ]
+      : [];
+    const r = await exec('git', [...auth, 'push', '--set-upstream', 'origin', branch], {
+      cwd: this.root,
+      timeoutMs: 600_000,
+    });
+    if (r.exitCode !== 0)
+      throw new WorkspaceError(
+        `git push failed: ${redact(r.stderr || r.stdout, token)
+          .trim()
+          .slice(0, 1500)}`,
+      );
   }
 }
 

@@ -6,8 +6,20 @@ import type { SkillRegistry } from './skills.js';
 
 /** Read access to the project knowledge graph, implemented by the worker over Postgres. */
 export interface KnowledgeAccess {
-  search(query: string, kind?: string): Promise<{ name: string; kind: string; path: string | null; summary: string | null; snippet: string }[]>;
-  object(name: string): Promise<{ name: string; kind: string; path: string | null; summary: string | null; metadata: Record<string, unknown>; content: string } | null>;
+  search(
+    query: string,
+    kind?: string,
+  ): Promise<{ name: string; kind: string; path: string | null; summary: string | null; snippet: string }[]>;
+  object(
+    name: string,
+  ): Promise<{
+    name: string;
+    kind: string;
+    path: string | null;
+    summary: string | null;
+    metadata: Record<string, unknown>;
+    content: string;
+  } | null>;
   dependencies(
     name: string,
     direction: 'uses' | 'used_by' | 'both',
@@ -39,7 +51,10 @@ export interface ToolDef<S extends z.ZodType = z.ZodType> {
 const def = <S extends z.ZodType>(t: ToolDef<S>): ToolDef<S> => t;
 
 function needWorkspace(ctx: ToolContext): Workspace {
-  if (!ctx.workspace) throw new WorkspaceError('This task has no repository checked out. Work from the knowledge graph instead.');
+  if (!ctx.workspace)
+    throw new WorkspaceError(
+      'This task has no repository checked out. Work from the knowledge graph instead.',
+    );
   return ctx.workspace;
 }
 function needOracle(ctx: ToolContext): OracleAdapter {
@@ -53,7 +68,10 @@ export const TOOLS: ToolDef[] = [
     group: 'knowledge',
     description:
       'Search the project knowledge graph (forms, reports, packages, tables, files) by name or text. Use first to find real component names.',
-    schema: z.object({ query: z.string().min(1), kind: z.string().optional().describe('Filter by kind, e.g. oracle_form, plsql_package, db_table') }),
+    schema: z.object({
+      query: z.string().min(1),
+      kind: z.string().optional().describe('Filter by kind, e.g. oracle_form, plsql_package, db_table'),
+    }),
     readOnly: true,
     describe: (i) => `Searching the knowledge graph for “${i.query}”`,
     run: (i, ctx) => ctx.knowledge.search(i.query, i.kind),
@@ -61,18 +79,24 @@ export const TOOLS: ToolDef[] = [
   def({
     name: 'knowledge_object',
     group: 'knowledge',
-    description: 'Get one object from the knowledge graph by exact name: summary, metadata (blocks, columns, members, reads, writes, calls) and source text.',
+    description:
+      'Get one object from the knowledge graph by exact name: summary, metadata (blocks, columns, members, reads, writes, calls) and source text.',
     schema: z.object({ name: z.string().min(1) }),
     readOnly: true,
     describe: (i) => `Reading ${i.name} from the knowledge graph`,
-    run: async (i, ctx) => (await ctx.knowledge.object(i.name)) ?? { error: `No object named ${i.name}. Use knowledge_search.` },
+    run: async (i, ctx) =>
+      (await ctx.knowledge.object(i.name)) ?? { error: `No object named ${i.name}. Use knowledge_search.` },
   }),
   def({
     name: 'knowledge_dependencies',
     group: 'knowledge',
     description:
       'List dependencies of an object. direction "uses" = what it reads/writes/calls; "used_by" = what depends on it; "both". Depth 1–3.',
-    schema: z.object({ name: z.string().min(1), direction: z.enum(['uses', 'used_by', 'both']), depth: z.number().int().min(1).max(3).default(1) }),
+    schema: z.object({
+      name: z.string().min(1),
+      direction: z.enum(['uses', 'used_by', 'both']),
+      depth: z.number().int().min(1).max(3).default(1),
+    }),
     readOnly: true,
     describe: (i) => `Tracing dependencies of ${i.name}`,
     run: (i, ctx) => ctx.knowledge.dependencies(i.name, i.direction, i.depth),
@@ -89,8 +113,13 @@ export const TOOLS: ToolDef[] = [
   def({
     name: 'read_file',
     group: 'workspace_read',
-    description: 'Read a text file with line numbers. Use start_line/end_line for large files. Line numbers are not part of the file.',
-    schema: z.object({ path: z.string().min(1), start_line: z.number().int().min(1).optional(), end_line: z.number().int().min(1).optional() }),
+    description:
+      'Read a text file with line numbers. Use start_line/end_line for large files. Line numbers are not part of the file.',
+    schema: z.object({
+      path: z.string().min(1),
+      start_line: z.number().int().min(1).optional(),
+      end_line: z.number().int().min(1).optional(),
+    }),
     readOnly: true,
     describe: (i) => `Reading ${i.path}`,
     run: (i, ctx) => needWorkspace(ctx).readFile(i.path, i.start_line, i.end_line),
@@ -98,7 +127,8 @@ export const TOOLS: ToolDef[] = [
   def({
     name: 'search_files',
     group: 'workspace_read',
-    description: 'Search file contents with a case-insensitive regular expression. Optional glob to limit files.',
+    description:
+      'Search file contents with a case-insensitive regular expression. Optional glob to limit files.',
     schema: z.object({ pattern: z.string().min(1), glob: z.string().optional() }),
     readOnly: true,
     describe: (i) => `Searching the code for /${i.pattern}/`,
@@ -107,7 +137,8 @@ export const TOOLS: ToolDef[] = [
   def({
     name: 'write_file',
     group: 'workspace_write',
-    description: 'Create a new file or fully replace a file you have read. Prefer edit_file for changes to existing files.',
+    description:
+      'Create a new file or fully replace a file you have read. Prefer edit_file for changes to existing files.',
     schema: z.object({ path: z.string().min(1), content: z.string() }),
     readOnly: false,
     describe: (i) => `Writing ${i.path}`,
@@ -140,7 +171,11 @@ export const TOOLS: ToolDef[] = [
     group: 'commands',
     description:
       'Run an allowed program in the repository (no shell: pipes, redirects and && do not work). Give the program name and an argument list.',
-    schema: z.object({ program: z.string().min(1), args: z.array(z.string()).default([]), timeout_seconds: z.number().int().min(5).max(1800).default(300) }),
+    schema: z.object({
+      program: z.string().min(1),
+      args: z.array(z.string()).default([]),
+      timeout_seconds: z.number().int().min(5).max(1800).default(300),
+    }),
     readOnly: false,
     describe: (i) => `Running ${[i.program, ...i.args].join(' ').slice(0, 120)}`,
     run: async (i, ctx) => {
@@ -178,7 +213,8 @@ export const TOOLS: ToolDef[] = [
   def({
     name: 'oracle_compile_form',
     group: 'oracle',
-    description: 'Compile a form (.fmb) against the sandbox schema with frmcmp_batch. Returns ok and the compiler log.',
+    description:
+      'Compile a form (.fmb) against the sandbox schema with frmcmp_batch. Returns ok and the compiler log.',
     schema: z.object({ fmb_path: z.string().min(1) }),
     readOnly: false,
     describe: (i) => `Compiling ${i.fmb_path}`,
@@ -229,7 +265,10 @@ export const TOOLS: ToolDef[] = [
     readOnly: true,
     describe: (i) => `Loading the ${i.name} skill`,
     run: async (i, ctx) => {
-      if (!ctx.allowedSkills.includes(i.name)) return { error: `Skill ${i.name} is not available to you. Available: ${ctx.allowedSkills.join(', ')}` };
+      if (!ctx.allowedSkills.includes(i.name))
+        return {
+          error: `Skill ${i.name} is not available to you. Available: ${ctx.allowedSkills.join(', ')}`,
+        };
       const s = ctx.skills.get(i.name);
       return s ? { name: s.name, instructions: s.body } : { error: `Skill ${i.name} was not found` };
     },
@@ -240,12 +279,18 @@ export const SUBMIT_TOOL = 'submit_result';
 export const BLOCKER_TOOL = 'report_blocker';
 
 /** Tool definitions for the model, filtered to the agent's groups, plus submit and blocker tools. */
-export function toolsFor(groups: ToolGroup[], resultSchema: Record<string, unknown>): { defs: Anthropic.Beta.BetaTool[]; byName: Map<string, ToolDef> } {
+export function toolsFor(
+  groups: ToolGroup[],
+  resultSchema: Record<string, unknown>,
+): { defs: Anthropic.Beta.BetaTool[]; byName: Map<string, ToolDef> } {
   const allowed = TOOLS.filter((t) => t.group === 'core' || groups.includes(t.group as ToolGroup));
   const defs: Anthropic.Beta.BetaTool[] = allowed.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: z.toJSONSchema(t.schema, { io: 'input', unrepresentable: 'any' }) as Anthropic.Beta.BetaTool['input_schema'],
+    input_schema: z.toJSONSchema(t.schema, {
+      io: 'input',
+      unrepresentable: 'any',
+    }) as Anthropic.Beta.BetaTool['input_schema'],
   }));
   defs.push({
     name: SUBMIT_TOOL,

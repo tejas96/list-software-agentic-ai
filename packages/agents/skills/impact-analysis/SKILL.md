@@ -8,6 +8,7 @@ description: Trace every component a change touches in a legacy Oracle system (f
 Nothing is changed blind. The impact map is the contract the rest of the team works from, so every entry needs evidence.
 
 ## Procedure
+
 1. **Anchor**: find the objects the requirement names (`knowledge_search`). Prefer exact object names. Try synonyms (e.g. "address" → `ADDRESS`, `ADDR`, `ADDRESS_LINE1`).
 2. **Walk dependencies** with `knowledge_dependencies` in both directions, depth 2:
    - Forms → blocks → data-source tables; triggers → packages they call.
@@ -26,7 +27,9 @@ Nothing is changed blind. The impact map is the contract the rest of the team wo
 6. **Risks**: data volume (ALTER on large tables), locking, invalidation cascade (changing a package spec invalidates dependants), NOT NULL on existing rows, performance of new queries.
 
 ## Evidence format
+
 For each component: `finding` = one sentence with the concrete fact and where you saw it, e.g. "POST-INSERT trigger on block CUSTOMER inserts into CUSTOMER_AUDIT with an explicit column list (CUSTOMER_ACCOUNT_fmb.xml line 212) — needs the new column".
 
 ## Root cause (defects)
+
 For bugs: reproduce the reasoning from symptom to code. State the exact line or condition that is wrong, why it produces the symptom, and which other paths share it.

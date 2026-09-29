@@ -79,7 +79,9 @@ export function parseXml(src: string): XmlNode {
       const body = selfClosing ? raw.slice(0, -1) : raw;
       const nameMatch = body.match(/^\s*([^\s/>]+)/);
       const node: XmlNode = { name: nameMatch?.[1] ?? '', attrs: {}, children: [], text: '', line };
-      for (const a of body.slice(nameMatch?.[0].length ?? 0).matchAll(/([^\s=]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) {
+      for (const a of body
+        .slice(nameMatch?.[0].length ?? 0)
+        .matchAll(/([^\s=]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) {
         node.attrs[a[1]!] = decodeEntities(a[3] ?? a[4] ?? '');
       }
       stack.at(-1)!.children.push(node);

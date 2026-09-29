@@ -148,7 +148,10 @@ export const tickets = pgTable(
     acceptanceCriteria: jsonb('acceptance_criteria').$type<AcceptanceCriterion[]>().notNull().default([]),
     status: ticketStatus('status').notNull().default('backlog'),
     priority: ticketPriority('priority').notNull().default('medium'),
-    labels: text('labels').array().notNull().default(sql`'{}'::text[]`),
+    labels: text('labels')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     source: ticketSource('source').notNull(),
     externalRef: text('external_ref'),
     reporterId: uuid('reporter_id').references(() => users.id),
@@ -337,7 +340,10 @@ export const artifacts = pgTable(
     version: integer('version').notNull().default(1),
     createdAt: createdAt(),
   },
-  (t) => [index('artifacts_run_idx').on(t.runId, t.kind, t.version), index('artifacts_ticket_idx').on(t.ticketId)],
+  (t) => [
+    index('artifacts_run_idx').on(t.runId, t.kind, t.version),
+    index('artifacts_ticket_idx').on(t.ticketId),
+  ],
 );
 
 export const llmUsage = pgTable(
@@ -357,7 +363,10 @@ export const llmUsage = pgTable(
     costUsd: numeric('cost_usd', { precision: 12, scale: 6, mode: 'number' }).notNull().default(0),
     createdAt: createdAt(),
   },
-  (t) => [index('llm_usage_run_idx').on(t.runId), index('llm_usage_project_idx').on(t.projectId, t.createdAt)],
+  (t) => [
+    index('llm_usage_run_idx').on(t.runId),
+    index('llm_usage_project_idx').on(t.projectId, t.createdAt),
+  ],
 );
 
 /* -------------------------------------------------------------- knowledge */

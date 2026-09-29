@@ -24,7 +24,15 @@ import { Database } from '../infra/database.js';
 import { TemporalService } from '../infra/temporal.service.js';
 
 function toObjectDto(o: typeof codeObjects.$inferSelect): CodeObjectDto {
-  return { id: o.id, kind: o.kind, name: o.name, path: o.path, language: o.language, summary: o.summary, metadata: o.metadata };
+  return {
+    id: o.id,
+    kind: o.kind,
+    name: o.name,
+    path: o.path,
+    language: o.language,
+    summary: o.summary,
+    metadata: o.metadata,
+  };
 }
 
 @Injectable()
@@ -77,7 +85,9 @@ export class KnowledgeService {
   async createSource(user: SessionUser, projectId: string, req: CreateSourceRequest): Promise<SourceDto[]> {
     await this.access.require(user, projectId, 'knowledge.manage');
     if (req.credentialId) await this.assertCredential(projectId, req.credentialId);
-    const { kind, name, credentialId, ...config } = req as CreateSourceRequest & { credentialId?: string | null };
+    const { kind, name, credentialId, ...config } = req as CreateSourceRequest & {
+      credentialId?: string | null;
+    };
     if (kind === 'git' && !/^(https?:\/\/|git@|file:\/\/|\/)/.test(String((config as { url: string }).url))) {
       throw invalid('Use an https://, git@ or file:// repository URL');
     }
@@ -96,7 +106,9 @@ export class KnowledgeService {
       });
       return s!.id;
     });
-    await this.sync(user, id).catch((err: Error) => this.logger.warn(`Initial sync not started: ${err.message}`));
+    await this.sync(user, id).catch((err: Error) =>
+      this.logger.warn(`Initial sync not started: ${err.message}`),
+    );
     return this.listSources(user, projectId);
   }
 
@@ -128,7 +140,15 @@ export class KnowledgeService {
     await this.access.require(user, q.projectId, 'knowledge.query');
     const hits = await searchKnowledge(this.database.db, q.projectId, q.q, { kind: q.kind, limit: q.limit });
     return hits.map((h) => ({
-      object: { id: h.id, kind: h.kind, name: h.name, path: h.path, language: null, summary: h.summary, metadata: h.metadata },
+      object: {
+        id: h.id,
+        kind: h.kind,
+        name: h.name,
+        path: h.path,
+        language: null,
+        summary: h.summary,
+        metadata: h.metadata,
+      },
       snippet: h.snippet,
       score: h.score,
     }));
@@ -137,15 +157,29 @@ export class KnowledgeService {
   /** Answer a question about the codebase from the knowledge graph, citing objects. */
   async ask(user: SessionUser, req: AskRequest): Promise<AskAnswerDto> {
     await this.access.require(user, req.projectId, 'knowledge.query');
-    if (!this.llm.available) throw unavailable('No LLM provider is configured. An administrator needs to set ANTHROPIC_API_KEY.');
-    const hits = await searchKnowledge(this.database.db, req.projectId, req.question.slice(0, 300), { limit: 8 });
+    if (!this.llm.available)
+      throw unavailable('No LLM provider is configured. An administrator needs to set ANTHROPIC_API_KEY.');
+    const hits = await searchKnowledge(this.database.db, req.projectId, req.question.slice(0, 300), {
+      limit: 8,
+    });
     const sources: { id: string; name: string; kind: string; path: string | null; text: string }[] = [];
     for (const h of hits.slice(0, 6)) {
       const o = await knowledgeObjectByName(this.database.db, req.projectId, h.name);
-      if (o) sources.push({ id: o.id, name: o.name, kind: o.kind, path: o.path, text: `${o.summary ?? ''}\n${o.content}` });
+      if (o)
+        sources.push({
+          id: o.id,
+          name: o.name,
+          kind: o.kind,
+          path: o.path,
+          text: `${o.summary ?? ''}\n${o.content}`,
+        });
     }
     try {
-      const res = await answerQuestion(this.llm, { agent: 'legacy_intelligence', question: req.question, sources });
+      const res = await answerQuestion(this.llm, {
+        agent: 'legacy_intelligence',
+        question: req.question,
+        sources,
+      });
       await this.database.db.insert(llmUsage).values({
         projectId: req.projectId,
         agentKey: 'legacy_intelligence',
@@ -159,7 +193,9 @@ export class KnowledgeService {
       });
       return {
         answer: res.answer,
-        citations: sources.filter((s) => res.cited.includes(s.name)).map((s) => ({ objectId: s.id, name: s.name, path: s.path })),
+        citations: sources
+          .filter((s) => res.cited.includes(s.name))
+          .map((s) => ({ objectId: s.id, name: s.name, path: s.path })),
       };
     } catch (err) {
       if (err instanceof LlmError) throw new AppError(err.retryable ? 503 : 422, 'llm_error', err.message);
@@ -189,7 +225,10 @@ export class KnowledgeService {
       ids.add(e.from_id);
       ids.add(e.to_id);
     }
-    const nodes = await this.database.db.select().from(codeObjects).where(sql`${codeObjects.id} in ${[...ids]}`);
+    const nodes = await this.database.db
+      .select()
+      .from(codeObjects)
+      .where(sql`${codeObjects.id} in ${[...ids]}`);
     return {
       root: toObjectDto(root),
       nodes: nodes.map(toObjectDto),
@@ -212,14 +251,29 @@ export class KnowledgeService {
   async listCredentials(user: SessionUser, projectId: string): Promise<CredentialDto[]> {
     await this.access.require(user, projectId, 'credentials.manage');
     const rows = await this.database.db
-      .select({ id: credentials.id, projectId: credentials.projectId, name: credentials.name, kind: credentials.kind, createdAt: credentials.createdAt, lastUsedAt: credentials.lastUsedAt })
+      .select({
+        id: credentials.id,
+        projectId: credentials.projectId,
+        name: credentials.name,
+        kind: credentials.kind,
+        createdAt: credentials.createdAt,
+        lastUsedAt: credentials.lastUsedAt,
+      })
       .from(credentials)
       .where(eq(credentials.projectId, projectId))
       .orderBy(asc(credentials.name));
-    return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), lastUsedAt: r.lastUsedAt?.toISOString() ?? null }));
+    return rows.map((r) => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+      lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
+    }));
   }
 
-  async createCredential(user: SessionUser, projectId: string, req: CreateCredentialRequest): Promise<CredentialDto[]> {
+  async createCredential(
+    user: SessionUser,
+    projectId: string,
+    req: CreateCredentialRequest,
+  ): Promise<CredentialDto[]> {
     await this.access.require(user, projectId, 'credentials.manage');
     if (req.kind === 'oracle_db') {
       try {
@@ -232,7 +286,13 @@ export class KnowledgeService {
     await this.database.db.transaction(async (tx) => {
       const [c] = await tx
         .insert(credentials)
-        .values({ projectId, name: req.name, kind: req.kind, ciphertext: this.box.encrypt(req.secret), createdById: user.id })
+        .values({
+          projectId,
+          name: req.name,
+          kind: req.kind,
+          ciphertext: this.box.encrypt(req.secret),
+          createdById: user.id,
+        })
         .returning({ id: credentials.id });
       await appendActivity(tx, {
         projectId,
@@ -250,7 +310,11 @@ export class KnowledgeService {
     const [c] = await this.database.db.select().from(credentials).where(eq(credentials.id, credentialId));
     if (!c) throw notFound('Credential');
     await this.access.require(user, c.projectId, 'credentials.manage');
-    const [inUse] = await this.database.db.select({ id: sources.id }).from(sources).where(eq(sources.credentialId, credentialId)).limit(1);
+    const [inUse] = await this.database.db
+      .select({ id: sources.id })
+      .from(sources)
+      .where(eq(sources.credentialId, credentialId))
+      .limit(1);
     if (inUse) throw invalid('A knowledge source uses this credential. Remove or change the source first.');
     await this.database.db.transaction(async (tx) => {
       await tx.delete(credentials).where(eq(credentials.id, credentialId));
@@ -285,7 +349,11 @@ export class KnowledgeController {
   }
 
   @Post('projects/:id/sources')
-  createSource(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @ZBody(CreateSourceRequest) body: CreateSourceRequest) {
+  createSource(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(CreateSourceRequest) body: CreateSourceRequest,
+  ) {
     return this.svc.createSource(user, id, body);
   }
 
@@ -328,7 +396,11 @@ export class KnowledgeController {
   }
 
   @Post('projects/:id/credentials')
-  createCredential(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @ZBody(CreateCredentialRequest) body: CreateCredentialRequest) {
+  createCredential(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(CreateCredentialRequest) body: CreateCredentialRequest,
+  ) {
     return this.svc.createCredential(user, id, body);
   }
 

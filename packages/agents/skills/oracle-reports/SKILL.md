@@ -6,10 +6,12 @@ description: Read and modify Oracle Reports (.rdf) through XML (rwconverter): da
 # Oracle Reports
 
 ## Files
+
 - `.rdf` is binary. Convert with `oracle_report_to_xml` (`<NAME>_rdf.xml`), edit, convert back with `oracle_xml_to_report`.
 - Some repositories keep `.jsp` or `.xml` reports; edit those directly.
 
 ## XML structure
+
 ```
 <report name="CUSTOMER_SUMMARY">
   <data>
@@ -28,6 +30,7 @@ description: Read and modify Oracle Reports (.rdf) through XML (rwconverter): da
 ```
 
 ## Adding a column to a report
+
 1. Add the column to the query `SELECT` (explicit column, never `*`).
 2. Add a matching `dataItem` in the right group with correct `datatype`, `width` and `columnOrder`.
 3. Add a layout `field` with `source` = the data item, placed in the repeating frame of that group. Copy a neighbouring field's font and format attributes; adjust frame width if the layout would overflow.
@@ -35,6 +38,7 @@ description: Read and modify Oracle Reports (.rdf) through XML (rwconverter): da
 5. Convert back and, when possible, run the report in the sandbox with a known parameter set; compare output with the expected rows.
 
 ## Rules
+
 - Keep query changes minimal; do not reformat the whole SQL (reviewers need a readable diff).
 - Parameters: never concatenate into SQL; use bind references (`:P_BRANCH`).
 - Lexical parameters (`&P_WHERE`) are an injection risk; flag any new use to Security.

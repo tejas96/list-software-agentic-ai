@@ -32,7 +32,9 @@ export type WorkerConfig = z.infer<typeof Env> & { workspacesRoot: string; hostQ
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
   const parsed = Env.safeParse(env);
   if (!parsed.success) {
-    throw new Error(`Invalid worker configuration:\n${parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n')}`);
+    throw new Error(
+      `Invalid worker configuration:\n${parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n')}`,
+    );
   }
   const c = parsed.data;
   return {

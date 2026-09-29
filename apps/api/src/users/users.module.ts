@@ -42,7 +42,12 @@ export class UsersService {
     return this.database.db.transaction(async (tx) => {
       const [u] = await tx
         .insert(users)
-        .values({ email: req.email.toLowerCase(), name: req.name, passwordHash: await hashPassword(req.password), isAdmin: req.isAdmin })
+        .values({
+          email: req.email.toLowerCase(),
+          name: req.name,
+          passwordHash: await hashPassword(req.password),
+          isAdmin: req.isAdmin,
+        })
         .returning();
       await appendActivity(tx, {
         projectId: null,
@@ -70,7 +75,11 @@ export class UsersService {
           ...(req.name !== undefined && { name: req.name }),
           ...(req.isAdmin !== undefined && { isAdmin: req.isAdmin }),
           ...(req.status !== undefined && { status: req.status }),
-          ...(req.password !== undefined && { passwordHash: await hashPassword(req.password), failedLogins: 0, lockedUntil: null }),
+          ...(req.password !== undefined && {
+            passwordHash: await hashPassword(req.password),
+            failedLogins: 0,
+            lockedUntil: null,
+          }),
           ...(endSessions && { sessionVersion: sql`${users.sessionVersion} + 1` }),
         })
         .where(eq(users.id, id))
@@ -114,7 +123,11 @@ export class UsersController {
 
   @AdminOnly()
   @Patch(':id')
-  update(@CurrentUser() actor: SessionUser, @UuidParam('id') id: string, @ZBody(UpdateUserRequest) body: UpdateUserRequest) {
+  update(
+    @CurrentUser() actor: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(UpdateUserRequest) body: UpdateUserRequest,
+  ) {
     return this.svc.update(actor, id, body);
   }
 }

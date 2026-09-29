@@ -15,18 +15,37 @@ export async function notifyUsers(tx: DbOrTx, userIds: string[], input: Notifica
   if (unique.length === 0) return;
   const rows = await tx
     .insert(notifications)
-    .values(unique.map((userId) => ({ userId, type: input.type, title: input.title, body: input.body ?? '', link: input.link ?? null })))
+    .values(
+      unique.map((userId) => ({
+        userId,
+        type: input.type,
+        title: input.title,
+        body: input.body ?? '',
+        link: input.link ?? null,
+      })),
+    )
     .returning({ id: notifications.id, userId: notifications.userId });
-  for (const r of rows) await publish(tx, { type: 'notification.added', userId: r.userId, notificationId: r.id });
+  for (const r of rows)
+    await publish(tx, { type: 'notification.added', userId: r.userId, notificationId: r.id });
 }
 
 /** Active project members holding one of the given roles. */
-export async function projectMembersWithRoles(tx: DbOrTx, projectId: string, roles: ProjectRole[]): Promise<string[]> {
+export async function projectMembersWithRoles(
+  tx: DbOrTx,
+  projectId: string,
+  roles: ProjectRole[],
+): Promise<string[]> {
   const rows = await tx
     .select({ userId: projectMembers.userId })
     .from(projectMembers)
     .innerJoin(users, eq(users.id, projectMembers.userId))
-    .where(and(eq(projectMembers.projectId, projectId), inArray(projectMembers.role, roles), eq(users.status, 'active')));
+    .where(
+      and(
+        eq(projectMembers.projectId, projectId),
+        inArray(projectMembers.role, roles),
+        eq(users.status, 'active'),
+      ),
+    );
   return rows.map((r) => r.userId);
 }
 

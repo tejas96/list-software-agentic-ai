@@ -10,7 +10,13 @@ export type RealtimeEvent =
   | { type: 'ticket.changed'; projectId: string; ticketId: string }
   | { type: 'ticket.created'; projectId: string; ticketId: string }
   | { type: 'comment.added'; projectId: string; ticketId: string; commentId: string }
-  | { type: 'activity.added'; projectId: string; ticketId: string | null; runId: string | null; activityId: string }
+  | {
+      type: 'activity.added';
+      projectId: string;
+      ticketId: string | null;
+      runId: string | null;
+      activityId: string;
+    }
   | { type: 'run.changed'; projectId: string; ticketId: string; runId: string }
   | { type: 'step.changed'; projectId: string; ticketId: string; runId: string; stepId: string }
   | { type: 'gate.changed'; projectId: string; ticketId: string; runId: string; gateId: string }

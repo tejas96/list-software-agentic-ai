@@ -11,7 +11,23 @@ export interface SourceFile {
   binary?: boolean;
 }
 
-const PLSQL_EXT = new Set(['.sql', '.pks', '.pkb', '.pls', '.plb', '.prc', '.fnc', '.trg', '.vw', '.tab', '.ddl', '.pck', '.spc', '.bdy', '.seq']);
+const PLSQL_EXT = new Set([
+  '.sql',
+  '.pks',
+  '.pkb',
+  '.pls',
+  '.plb',
+  '.prc',
+  '.fnc',
+  '.trg',
+  '.vw',
+  '.tab',
+  '.ddl',
+  '.pck',
+  '.spc',
+  '.bdy',
+  '.seq',
+]);
 const CODE_EXT: Record<string, string> = {
   '.java': 'java',
   '.cs': 'csharp',
@@ -42,7 +58,13 @@ export function sha256(s: string): string {
 }
 
 /** Split text into overlapping line windows for search. */
-export function chunkText(text: string, firstLine = 1, windowLines = 60, overlap = 10, maxChunks = 200): ChunkRecord[] {
+export function chunkText(
+  text: string,
+  firstLine = 1,
+  windowLines = 60,
+  overlap = 10,
+  maxChunks = 200,
+): ChunkRecord[] {
   const lines = text.split('\n');
   const out: ChunkRecord[] = [];
   const step = Math.max(1, windowLines - overlap);
@@ -50,7 +72,12 @@ export function chunkText(text: string, firstLine = 1, windowLines = 60, overlap
     const slice = lines.slice(start, start + windowLines);
     const content = slice.join('\n').trim();
     if (content) {
-      out.push({ ordinal: out.length, content, startLine: firstLine + start, endLine: firstLine + start + slice.length - 1 });
+      out.push({
+        ordinal: out.length,
+        content,
+        startLine: firstLine + start,
+        endLine: firstLine + start + slice.length - 1,
+      });
     }
     if (start + windowLines >= lines.length) break;
   }
@@ -72,7 +99,9 @@ function refsFrom(kind: string, name: string, refs: References): RefRecord[] {
 
 function list(items: string[], max = 8): string {
   if (items.length === 0) return 'none';
-  return items.length <= max ? items.join(', ') : `${items.slice(0, max).join(', ')} and ${items.length - max} more`;
+  return items.length <= max
+    ? items.join(', ')
+    : `${items.slice(0, max).join(', ')} and ${items.length - max} more`;
 }
 
 /**
@@ -91,7 +120,11 @@ export function buildGraph(files: SourceFile[]): GraphResult {
       return;
     }
     // Merge (package spec + body, or the same object defined twice).
-    existing.metadata = { ...existing.metadata, ...o.metadata, paths: [...new Set([...(existing.metadata.paths as string[] ?? [existing.path]), o.path])] };
+    existing.metadata = {
+      ...existing.metadata,
+      ...o.metadata,
+      paths: [...new Set([...((existing.metadata.paths as string[]) ?? [existing.path]), o.path])],
+    };
     const offset = existing.chunks.length;
     existing.chunks.push(...o.chunks.map((c) => ({ ...c, ordinal: c.ordinal + offset })));
     existing.contentHash = sha256(existing.contentHash + o.contentHash);
@@ -187,13 +220,27 @@ export function buildGraph(files: SourceFile[]): GraphResult {
             name: blockName,
             path: f.path,
             language: 'oracle-forms',
-            summary: `Block ${b.name} of form ${form.name}; data source ${b.dataSource ?? 'none'}; items ${list(b.items.map((i) => i.name), 12)}.`,
+            summary: `Block ${b.name} of form ${form.name}; data source ${b.dataSource ?? 'none'}; items ${list(
+              b.items.map((i) => i.name),
+              12,
+            )}.`,
             metadata: { form: form.name, ...b },
             chunks: [],
             contentHash: sha256(JSON.stringify(b)),
           });
-          refs.push({ from: { kind: 'oracle_form', name: form.name }, toName: blockName, toKinds: ['form_block'], kind: 'contains' });
-          if (b.dataSource) refs.push({ from: { kind: 'form_block', name: blockName }, toName: b.dataSource, toKinds: TABLE_KINDS, kind: 'reads' });
+          refs.push({
+            from: { kind: 'oracle_form', name: form.name },
+            toName: blockName,
+            toKinds: ['form_block'],
+            kind: 'contains',
+          });
+          if (b.dataSource)
+            refs.push({
+              from: { kind: 'form_block', name: blockName },
+              toName: b.dataSource,
+              toKinds: TABLE_KINDS,
+              kind: 'reads',
+            });
         }
       } else if (ext === '.xml' && (lower.endsWith('_rdf.xml') || /<report[\s>]/.test(content))) {
         const rep = parseReportXml(content, base.replace(/(_rdf)?\.xml$/i, ''));
@@ -247,13 +294,22 @@ function fileObject(p: string, content: string, language: string): ObjectRecord 
   };
 }
 
-function describeUnit(kind: string, name: string, members: string[], refs: References, extra: Record<string, unknown>): string {
+function describeUnit(
+  kind: string,
+  name: string,
+  members: string[],
+  refs: References,
+  extra: Record<string, unknown>,
+): string {
   switch (kind) {
     case 'plsql_package':
       return `PL/SQL package ${name}${members.length ? ` with ${members.length} routine(s): ${list(members)}` : ''}. Reads ${list(refs.reads)}; writes ${list(refs.writes)}; calls ${list(refs.calls)}.`;
     case 'db_table': {
       const cols = (extra.columns as { name: string }[] | undefined) ?? [];
-      return `Table ${name} with ${cols.length} column(s): ${list(cols.map((c) => c.name), 15)}.`;
+      return `Table ${name} with ${cols.length} column(s): ${list(
+        cols.map((c) => c.name),
+        15,
+      )}.`;
     }
     case 'db_view':
       return `View ${name} reading ${list(refs.reads)}.`;

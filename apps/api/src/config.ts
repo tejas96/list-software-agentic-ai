@@ -7,7 +7,12 @@ const Env = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   MASTER_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'MASTER_KEY must be 64 hex characters'),
-  SESSION_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(12),
+  SESSION_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(12),
   TEMPORAL_ADDRESS: z.string().default('localhost:7233'),
   TEMPORAL_NAMESPACE: z.string().default('default'),
   TEMPORAL_TASK_QUEUE: z.string().default('lsa-sdlc'),

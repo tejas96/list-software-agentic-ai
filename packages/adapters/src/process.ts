@@ -31,7 +31,8 @@ export function exec(command: string, args: string[], options: ExecOptions): Pro
     let stdout = '';
     let stderr = '';
     let timedOut = false;
-    const append = (buf: string, chunk: Buffer) => (buf.length >= max ? buf : buf + chunk.toString('utf8').slice(0, max - buf.length));
+    const append = (buf: string, chunk: Buffer) =>
+      buf.length >= max ? buf : buf + chunk.toString('utf8').slice(0, max - buf.length);
     child.stdout.on('data', (c: Buffer) => (stdout = append(stdout, c)));
     child.stderr.on('data', (c: Buffer) => (stderr = append(stderr, c)));
     const timer = setTimeout(() => {
@@ -40,7 +41,13 @@ export function exec(command: string, args: string[], options: ExecOptions): Pro
     }, options.timeoutMs ?? 120_000);
     child.on('error', (err) => {
       clearTimeout(timer);
-      resolve({ exitCode: null, stdout, stderr: `${stderr}${err.message}`, timedOut, durationMs: Date.now() - started });
+      resolve({
+        exitCode: null,
+        stdout,
+        stderr: `${stderr}${err.message}`,
+        timedOut,
+        durationMs: Date.now() - started,
+      });
     });
     child.on('close', (code) => {
       clearTimeout(timer);

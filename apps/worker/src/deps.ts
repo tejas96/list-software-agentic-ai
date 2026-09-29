@@ -18,7 +18,11 @@ export function createDeps(config: WorkerConfig): Deps {
     config,
     db: handle.db,
     close: handle.close,
-    llm: new LlmGateway({ apiKey: config.ANTHROPIC_API_KEY || null, model: config.LLM_MODEL, refusalFallback: config.LLM_REFUSAL_FALLBACK }),
+    llm: new LlmGateway({
+      apiKey: config.ANTHROPIC_API_KEY || null,
+      model: config.LLM_MODEL,
+      refusalFallback: config.LLM_REFUSAL_FALLBACK,
+    }),
     skills: new SkillRegistry(),
     box: new SecretBox(config.MASTER_KEY),
   };

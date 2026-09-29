@@ -16,7 +16,12 @@ import { TemporalService } from './temporal.service.js';
     {
       provide: LlmGateway,
       inject: [APP_CONFIG],
-      useFactory: (c: AppConfig) => new LlmGateway({ apiKey: c.ANTHROPIC_API_KEY || null, model: c.LLM_MODEL, refusalFallback: c.LLM_REFUSAL_FALLBACK !== 'false' }),
+      useFactory: (c: AppConfig) =>
+        new LlmGateway({
+          apiKey: c.ANTHROPIC_API_KEY || null,
+          model: c.LLM_MODEL,
+          refusalFallback: c.LLM_REFUSAL_FALLBACK !== 'false',
+        }),
     },
     Database,
     TemporalService,

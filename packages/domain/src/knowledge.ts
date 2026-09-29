@@ -52,13 +52,30 @@ export async function searchKnowledge(
     from (select * from obj union all select * from chk union all select * from vec) u
     group by id order by score desc limit ${limit}`);
   if (res.rows.length === 0) return [];
-  const objs = await db.select().from(codeObjects).where(inArray(codeObjects.id, res.rows.map((r) => r.id)));
+  const objs = await db
+    .select()
+    .from(codeObjects)
+    .where(
+      inArray(
+        codeObjects.id,
+        res.rows.map((r) => r.id),
+      ),
+    );
   const byId = new Map(objs.map((o) => [o.id, o]));
   return res.rows
     .filter((r) => byId.has(r.id))
     .map((r) => {
       const o = byId.get(r.id)!;
-      return { id: o.id, name: o.name, kind: o.kind, path: o.path, summary: o.summary, metadata: o.metadata, snippet: r.snippet ?? o.summary ?? '', score: Number(r.score) };
+      return {
+        id: o.id,
+        name: o.name,
+        kind: o.kind,
+        path: o.path,
+        summary: o.summary,
+        metadata: o.metadata,
+        snippet: r.snippet ?? o.summary ?? '',
+        score: Number(r.score),
+      };
     });
 }
 
@@ -67,19 +84,46 @@ export async function knowledgeObjectByName(db: DbOrTx, projectId: string, name:
   const rows = await db
     .select()
     .from(codeObjects)
-    .where(and(eq(codeObjects.projectId, projectId), sql`(${codeObjects.name} = ${name} or ${codeObjects.name} = upper(${name}))`))
+    .where(
+      and(
+        eq(codeObjects.projectId, projectId),
+        sql`(${codeObjects.name} = ${name} or ${codeObjects.name} = upper(${name}))`,
+      ),
+    )
     .limit(5);
   if (rows.length === 0) return null;
   // Prefer the richest definition (a parsed module over a binary placeholder).
   const o = rows.sort((a, b) => (b.summary?.length ?? 0) - (a.summary?.length ?? 0))[0]!;
-  const text = await db.execute<{ content: string }>(sql`select content from chunks where object_id = ${o.id} order by ordinal limit 40`);
-  return { id: o.id, name: o.name, kind: o.kind, path: o.path, summary: o.summary, metadata: o.metadata, content: text.rows.map((r) => r.content).join('\n…\n') };
+  const text = await db.execute<{ content: string }>(
+    sql`select content from chunks where object_id = ${o.id} order by ordinal limit 40`,
+  );
+  return {
+    id: o.id,
+    name: o.name,
+    kind: o.kind,
+    path: o.path,
+    summary: o.summary,
+    metadata: o.metadata,
+    content: text.rows.map((r) => r.content).join('\n…\n'),
+  };
 }
 
 /** Dependencies of an object, walking up to `depth` hops. */
-export async function knowledgeDependencies(db: DbOrTx, projectId: string, name: string, direction: 'uses' | 'used_by' | 'both', depth: number) {
+export async function knowledgeDependencies(
+  db: DbOrTx,
+  projectId: string,
+  name: string,
+  direction: 'uses' | 'used_by' | 'both',
+  depth: number,
+) {
   const d = Math.max(1, Math.min(3, depth));
-  const res = await db.execute<{ from_name: string; from_kind: string; to_name: string; to_kind: string; kind: string }>(sql`
+  const res = await db.execute<{
+    from_name: string;
+    from_kind: string;
+    to_name: string;
+    to_kind: string;
+    kind: string;
+  }>(sql`
     with recursive start as (
       select id from code_objects where project_id = ${projectId} and (name = ${name} or name = upper(${name}))
     ),
@@ -99,5 +143,11 @@ export async function knowledgeDependencies(db: DbOrTx, projectId: string, name:
       and ((${direction} in ('uses','both') and e.from_id in (select id from walk))
         or (${direction} in ('used_by','both') and e.to_id in (select id from walk)))
     limit 300`);
-  return res.rows.map((r) => ({ from: r.from_name, fromKind: r.from_kind, to: r.to_name, toKind: r.to_kind, kind: r.kind }));
+  return res.rows.map((r) => ({
+    from: r.from_name,
+    fromKind: r.from_kind,
+    to: r.to_name,
+    toKind: r.to_kind,
+    kind: r.kind,
+  }));
 }

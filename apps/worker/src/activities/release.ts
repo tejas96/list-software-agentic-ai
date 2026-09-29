@@ -13,17 +13,27 @@ import { prepareRunEnvironment } from './workspace.js';
 export function releaseActivities(deps: Deps) {
   const { db } = deps;
   return {
-    async publishBranch(runId: string): Promise<{ pushed: boolean; branch: string | null; pullRequestUrl: string | null; note: string }> {
+    async publishBranch(
+      runId: string,
+    ): Promise<{ pushed: boolean; branch: string | null; pullRequestUrl: string | null; note: string }> {
       const env = await prepareRunEnvironment(db, deps.box, deps.config, runId, true);
       const [run] = await db.select().from(runs).where(eq(runs.id, runId));
       const [ticket] = await db.select().from(tickets).where(eq(tickets.id, run!.ticketId));
       if (!env.workspace || !env.branch) {
-        return { pushed: false, branch: null, pullRequestUrl: null, note: 'No repository is connected, so there is no branch to publish.' };
+        return {
+          pushed: false,
+          branch: null,
+          pullRequestUrl: null,
+          note: 'No repository is connected, so there is no branch to publish.',
+        };
       }
       try {
         await env.workspace.push(env.branch, env.gitToken);
       } catch (err) {
-        throw ApplicationFailure.nonRetryable(`Could not push ${env.branch}: ${(err as Error).message}`, 'PushFailed');
+        throw ApplicationFailure.nonRetryable(
+          `Could not push ${env.branch}: ${(err as Error).message}`,
+          'PushFailed',
+        );
       }
       let pullRequestUrl: string | null = null;
       let note = `Pushed ${env.branch}.`;
@@ -39,8 +49,17 @@ export function releaseActivities(deps: Deps) {
         ].join('\n');
         const res = await fetch(`https://api.github.com/repos/${gh[1]}/${gh[2]}/pulls`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${env.gitToken}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: `${ticket!.key}: ${ticket!.title}`, head: env.branch, base: env.settings.baseBranch, body }),
+          headers: {
+            Authorization: `Bearer ${env.gitToken}`,
+            Accept: 'application/vnd.github+json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: `${ticket!.key}: ${ticket!.title}`,
+            head: env.branch,
+            base: env.settings.baseBranch,
+            body,
+          }),
         });
         if (res.ok) {
           pullRequestUrl = ((await res.json()) as { html_url?: string }).html_url ?? null;

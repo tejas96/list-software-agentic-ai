@@ -27,7 +27,9 @@ type OracleDbModule = typeof import('oracledb');
 let oracledbPromise: Promise<OracleDbModule> | null = null;
 async function oracledb(): Promise<OracleDbModule> {
   // Thin mode: pure JavaScript, no Oracle Instant Client needed.
-  oracledbPromise ??= import('oracledb').then((m) => ((m as unknown as { default?: OracleDbModule }).default ?? m));
+  oracledbPromise ??= import('oracledb').then(
+    (m) => (m as unknown as { default?: OracleDbModule }).default ?? m,
+  );
   return oracledbPromise;
 }
 
@@ -43,7 +45,11 @@ export class OracleAdapter {
   ) {}
 
   get capabilities() {
-    return { forms: Boolean(this.tooling.formsBinDir), reports: Boolean(this.tooling.reportsBinDir), sandboxDb: Boolean(this.sandbox) };
+    return {
+      forms: Boolean(this.tooling.formsBinDir),
+      reports: Boolean(this.tooling.reportsBinDir),
+      sandboxDb: Boolean(this.sandbox),
+    };
   }
 
   private bin(kind: 'forms' | 'reports', program: string): string {
@@ -64,7 +70,10 @@ export class OracleAdapter {
   /** CUSTOMER_ACCOUNT.fmb → CUSTOMER_ACCOUNT_fmb.xml (next to the module). */
   async formToXml(ws: Workspace, fmbPath: string): Promise<{ xmlPath: string; log: string }> {
     const abs = await ws.resolve(fmbPath, true);
-    const r = await exec(this.bin('forms', 'frmf2xml'), ['OVERWRITE=YES', path.basename(abs)], { cwd: path.dirname(abs), timeoutMs: 300_000 });
+    const r = await exec(this.bin('forms', 'frmf2xml'), ['OVERWRITE=YES', path.basename(abs)], {
+      cwd: path.dirname(abs),
+      timeoutMs: 300_000,
+    });
     const xml = abs.replace(/\.fmb$/i, '_fmb.xml');
     await assertCreated(xml, r.stdout + r.stderr, 'frmf2xml');
     return { xmlPath: ws.rel(xml), log: tail(r.stdout + r.stderr) };
@@ -73,7 +82,10 @@ export class OracleAdapter {
   /** CUSTOMER_ACCOUNT_fmb.xml → CUSTOMER_ACCOUNT.fmb. */
   async xmlToForm(ws: Workspace, xmlPath: string): Promise<{ fmbPath: string; log: string }> {
     const abs = await ws.resolve(xmlPath, true);
-    const r = await exec(this.bin('forms', 'frmxml2f'), ['OVERWRITE=YES', path.basename(abs)], { cwd: path.dirname(abs), timeoutMs: 300_000 });
+    const r = await exec(this.bin('forms', 'frmxml2f'), ['OVERWRITE=YES', path.basename(abs)], {
+      cwd: path.dirname(abs),
+      timeoutMs: 300_000,
+    });
     const fmb = abs.replace(/_fmb\.xml$/i, '.fmb');
     await assertCreated(fmb, r.stdout + r.stderr, 'frmxml2f');
     return { fmbPath: ws.rel(fmb), log: tail(r.stdout + r.stderr) };
@@ -85,7 +97,14 @@ export class OracleAdapter {
     const cwd = path.dirname(abs);
     const r = await exec(
       this.bin('forms', 'frmcmp_batch'),
-      [`module=${path.basename(abs)}`, `userid=${this.userid()}`, 'module_type=form', 'compile_all=yes', 'batch=yes', 'window_state=minimize'],
+      [
+        `module=${path.basename(abs)}`,
+        `userid=${this.userid()}`,
+        'module_type=form',
+        'compile_all=yes',
+        'batch=yes',
+        'window_state=minimize',
+      ],
       { cwd, timeoutMs: 600_000 },
     );
     const errFile = abs.replace(/\.fmb$/i, '.err');
@@ -99,14 +118,25 @@ export class OracleAdapter {
   }
 
   /** Convert a report between binary (.rdf) and XML. */
-  async convertReport(ws: Workspace, sourcePath: string, to: 'xml' | 'rdf'): Promise<{ outputPath: string; log: string }> {
+  async convertReport(
+    ws: Workspace,
+    sourcePath: string,
+    to: 'xml' | 'rdf',
+  ): Promise<{ outputPath: string; log: string }> {
     const abs = await ws.resolve(sourcePath, true);
     const dest = to === 'xml' ? abs.replace(/\.rdf$/i, '_rdf.xml') : abs.replace(/_rdf\.xml$/i, '.rdf');
     const stype = to === 'xml' ? 'rdffile' : 'xmlfile';
     const dtype = to === 'xml' ? 'xmlfile' : 'rdffile';
     const r = await exec(
       this.bin('reports', 'rwconverter'),
-      [`source=${path.basename(abs)}`, `stype=${stype}`, `dest=${path.basename(dest)}`, `dtype=${dtype}`, 'batch=yes', 'overwrite=yes'],
+      [
+        `source=${path.basename(abs)}`,
+        `stype=${stype}`,
+        `dest=${path.basename(dest)}`,
+        `dtype=${dtype}`,
+        'batch=yes',
+        'overwrite=yes',
+      ],
       { cwd: path.dirname(abs), timeoutMs: 300_000 },
     );
     await assertCreated(dest, r.stdout + r.stderr, 'rwconverter');
@@ -124,9 +154,17 @@ export class OracleAdapter {
   ): Promise<{ rows?: Record<string, unknown>[]; rowsAffected?: number; columns?: string[] }> {
     if (!this.sandbox) throw new OracleUnavailableError('No sandbox database is configured for this project');
     const db = await oracledb();
-    const conn = await db.getConnection({ user: this.sandbox.user, password: this.sandbox.password, connectString: this.sandbox.connectString });
+    const conn = await db.getConnection({
+      user: this.sandbox.user,
+      password: this.sandbox.password,
+      connectString: this.sandbox.connectString,
+    });
     try {
-      const res = await conn.execute(normaliseStatement(statement), binds, { outFormat: db.OUT_FORMAT_OBJECT, maxRows, autoCommit: true });
+      const res = await conn.execute(normaliseStatement(statement), binds, {
+        outFormat: db.OUT_FORMAT_OBJECT,
+        maxRows,
+        autoCommit: true,
+      });
       return {
         rows: res.rows as Record<string, unknown>[] | undefined,
         rowsAffected: res.rowsAffected,
@@ -141,7 +179,10 @@ export class OracleAdapter {
   async describe(owner: string | null, name: string): Promise<Record<string, unknown>> {
     const binds = { name: name.toUpperCase(), owner: owner ? owner.toUpperCase() : null };
     const ownerClause = 'and (:owner is null or owner = :owner)';
-    const objects = await this.runSql(`select owner, object_name, object_type, status, last_ddl_time from all_objects where object_name = :name ${ownerClause}`, binds);
+    const objects = await this.runSql(
+      `select owner, object_name, object_type, status, last_ddl_time from all_objects where object_name = :name ${ownerClause}`,
+      binds,
+    );
     const columns = await this.runSql(
       `select column_name, data_type, data_length, nullable from all_tab_columns where table_name = :name ${ownerClause} order by column_id`,
       binds,
@@ -170,8 +211,14 @@ async function assertCreated(file: string, log: string, tool: string): Promise<v
 
 /** Oracle's driver takes one statement without a trailing ";" or "/", except PL/SQL blocks which keep their final ";". */
 export function normaliseStatement(statement: string): string {
-  let text = statement.trim().replace(/\n\/\s*$/, '').trim();
-  const isPlsql = /^(begin|declare|create\s+(or\s+replace\s+)?(editionable\s+)?(package|procedure|function|trigger|type))\b/i.test(text);
+  let text = statement
+    .trim()
+    .replace(/\n\/\s*$/, '')
+    .trim();
+  const isPlsql =
+    /^(begin|declare|create\s+(or\s+replace\s+)?(editionable\s+)?(package|procedure|function|trigger|type))\b/i.test(
+      text,
+    );
   if (!isPlsql) text = text.replace(/;\s*$/, '');
   return text;
 }
@@ -193,13 +240,27 @@ export interface OracleMetadataObject {
 
 export interface OracleMetadataSnapshot {
   objects: OracleMetadataObject[];
-  dependencies: { owner: string; name: string; type: string; refOwner: string; refName: string; refType: string }[];
+  dependencies: {
+    owner: string;
+    name: string;
+    type: string;
+    refOwner: string;
+    refName: string;
+    refType: string;
+  }[];
 }
 
 /** Read objects, source and dependencies for the given schemas (read-only queries). */
-export async function readOracleMetadata(conn: OracleConnection, schemas: string[]): Promise<OracleMetadataSnapshot> {
+export async function readOracleMetadata(
+  conn: OracleConnection,
+  schemas: string[],
+): Promise<OracleMetadataSnapshot> {
   const db = await oracledb();
-  const c = await db.getConnection({ user: conn.user, password: conn.password, connectString: conn.connectString });
+  const c = await db.getConnection({
+    user: conn.user,
+    password: conn.password,
+    connectString: conn.connectString,
+  });
   try {
     const owners = schemas.map((s) => s.toUpperCase());
     const binds = Object.fromEntries(owners.map((o, i) => [`o${i}`, o]));
@@ -216,12 +277,25 @@ export async function readOracleMetadata(conn: OracleConnection, schemas: string
       binds,
       opts,
     );
-    const cols = await c.execute<{ OWNER: string; TABLE_NAME: string; COLUMN_NAME: string; DATA_TYPE: string; NULLABLE: string }>(
+    const cols = await c.execute<{
+      OWNER: string;
+      TABLE_NAME: string;
+      COLUMN_NAME: string;
+      DATA_TYPE: string;
+      NULLABLE: string;
+    }>(
       `select owner, table_name, column_name, data_type, nullable from all_tab_columns where owner in (${inList}) order by owner, table_name, column_id`,
       binds,
       opts,
     );
-    const deps = await c.execute<{ OWNER: string; NAME: string; TYPE: string; REFERENCED_OWNER: string; REFERENCED_NAME: string; REFERENCED_TYPE: string }>(
+    const deps = await c.execute<{
+      OWNER: string;
+      NAME: string;
+      TYPE: string;
+      REFERENCED_OWNER: string;
+      REFERENCED_NAME: string;
+      REFERENCED_TYPE: string;
+    }>(
       `select owner, name, type, referenced_owner, referenced_name, referenced_type from all_dependencies
        where owner in (${inList}) and referenced_owner in (${inList})`,
       binds,

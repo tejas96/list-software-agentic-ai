@@ -61,7 +61,8 @@ export async function createTicket(tx: DbOrTx, input: NewTicket, actor: Actor): 
     .where(eq(projects.id, input.projectId))
     .returning({ seq: projects.ticketSeq, key: projects.key, archivedAt: projects.archivedAt });
   if (!proj) throw new DomainError('not_found', 'Project not found');
-  if (proj.archivedAt) throw new DomainError('invalid', 'This project is archived. Restore it to add tickets.');
+  if (proj.archivedAt)
+    throw new DomainError('invalid', 'This project is archived. Restore it to add tickets.');
 
   const rank = await topRank(tx, input.projectId, input.status);
   const [row] = await tx
@@ -96,7 +97,13 @@ export async function createTicket(tx: DbOrTx, input: NewTicket, actor: Actor): 
     ...actorFields(actor),
     type: 'ticket.created',
     summary: `Logged ${ticket.key}: ${ticket.title}`,
-    data: { key: ticket.key, type: ticket.type, priority: ticket.priority, source: ticket.source, status: ticket.status },
+    data: {
+      key: ticket.key,
+      type: ticket.type,
+      priority: ticket.priority,
+      source: ticket.source,
+      status: ticket.status,
+    },
   });
   await publish(tx, { type: 'ticket.created', projectId: ticket.projectId, ticketId: ticket.id });
   return ticket;

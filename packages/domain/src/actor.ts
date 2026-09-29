@@ -6,7 +6,11 @@ export type Actor =
   | { type: 'agent'; agentKey: AgentKey }
   | { type: 'system' };
 
-export function actorFields(actor: Actor): { actorType: ActorType; actorId: string | null; agentKey: AgentKey | null } {
+export function actorFields(actor: Actor): {
+  actorType: ActorType;
+  actorId: string | null;
+  agentKey: AgentKey | null;
+} {
   switch (actor.type) {
     case 'user':
       return { actorType: 'user', actorId: actor.userId, agentKey: null };

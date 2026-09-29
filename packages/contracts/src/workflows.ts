@@ -195,14 +195,30 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDefinition> = {
   full_change: {
     type: 'full_change',
     name: 'Full change',
-    description: 'Understand, analyse, plan, build with continuous testing, verify and release. Two approval gates.',
+    description:
+      'Understand, analyse, plan, build with continuous testing, verify and release. Two approval gates.',
     stages: [
-      { key: 'understand', name: 'Understand', groups: [['structure_requirement'], ['business_context', 'acceptance_tests']] },
+      {
+        key: 'understand',
+        name: 'Understand',
+        groups: [['structure_requirement'], ['business_context', 'acceptance_tests']],
+      },
       { key: 'analyse', name: 'Analyse', groups: [['impact_analysis']] },
       { key: 'plan', name: 'Plan', groups: [['change_plan'], ['test_plan']] },
-      { key: 'build', name: 'Build', gateBefore: 'plan', groups: [['implement_change', 'implement_db_change']], qaLoop: true },
+      {
+        key: 'build',
+        name: 'Build',
+        gateBefore: 'plan',
+        groups: [['implement_change', 'implement_db_change']],
+        qaLoop: true,
+      },
       { key: 'verify', name: 'Verify', groups: [['code_review', 'security_review']] },
-      { key: 'release', name: 'Release', gateBefore: 'release', groups: [['package_release'], ['release_notes']] },
+      {
+        key: 'release',
+        name: 'Release',
+        gateBefore: 'release',
+        groups: [['package_release'], ['release_notes']],
+      },
     ],
   },
   hotfix: {
@@ -213,9 +229,20 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDefinition> = {
       { key: 'understand', name: 'Understand', groups: [['structure_requirement']] },
       { key: 'analyse', name: 'Analyse', groups: [['root_cause_analysis'], ['reproduce_defect']] },
       { key: 'plan', name: 'Plan', groups: [['change_plan']] },
-      { key: 'build', name: 'Build', gateBefore: 'plan', groups: [['implement_change', 'implement_db_change']], qaLoop: true },
+      {
+        key: 'build',
+        name: 'Build',
+        gateBefore: 'plan',
+        groups: [['implement_change', 'implement_db_change']],
+        qaLoop: true,
+      },
       { key: 'verify', name: 'Verify', groups: [['code_review', 'security_review']] },
-      { key: 'release', name: 'Release', gateBefore: 'release', groups: [['package_release'], ['release_notes']] },
+      {
+        key: 'release',
+        name: 'Release',
+        gateBefore: 'release',
+        groups: [['package_release'], ['release_notes']],
+      },
     ],
   },
   analysis: {
@@ -232,7 +259,10 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDefinition> = {
 };
 
 /** Stages of a workflow with the gates the project has switched off removed. */
-export function effectiveStages(type: WorkflowType, gates: { plan: boolean; release: boolean }): StageDefinition[] {
+export function effectiveStages(
+  type: WorkflowType,
+  gates: { plan: boolean; release: boolean },
+): StageDefinition[] {
   return WORKFLOWS[type].stages.map((s) => {
     if (s.gateBefore && !gates[s.gateBefore]) {
       const { gateBefore: _drop, ...rest } = s;

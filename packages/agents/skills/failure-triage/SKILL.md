@@ -12,6 +12,7 @@ For every failed test decide one category:
 - **environment**: sandbox unavailable, missing grant, tooling not installed, network. Mark `blocked`, describe what is missing. Never report these as product defects.
 
 ## A good failure report (in `details`)
+
 1. What was run (test id, statement or command).
 2. Expected (from the test plan).
 3. Actual (exact value, error code and message).
@@ -19,4 +20,5 @@ For every failed test decide one category:
 5. Smallest suggestion for the fix, if obvious.
 
 ## Re-test
+
 After a fix, re-run the failing tests **and** the regression tests for the same components. `passed` is true only when every non-manual test passed. Manual tests stay listed with status `skipped` and a note that they need a person.

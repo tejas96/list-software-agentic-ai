@@ -13,7 +13,7 @@ import {
   type ProjectDto,
   type ProjectRole,
 } from '@lsa/contracts';
-import { appendActivity, projectMembers, projects, users } from '@lsa/db';
+import { appendActivity, credentials, projectMembers, projects, sources, users } from '@lsa/db';
 import { AccessService } from '../common/access.service.js';
 import { AdminOnly, CurrentUser, type SessionUser } from '../common/auth.js';
 import { invalid, notFound } from '../common/errors.js';
@@ -47,7 +47,12 @@ export class ProjectsService {
       from projects p where p.id in ${ids}
     `);
     for (const r of rows.rows) {
-      map.set(r.project_id, { open: r.open, needsApproval: r.needs_approval, blocked: r.blocked, activeRuns: r.active_runs });
+      map.set(r.project_id, {
+        open: r.open,
+        needsApproval: r.needs_approval,
+        blocked: r.blocked,
+        activeRuns: r.active_runs,
+      });
     }
     return map;
   }
@@ -83,7 +88,9 @@ export class ProjectsService {
         .select({ p: projects, role: projectMembers.role })
         .from(projectMembers)
         .innerJoin(projects, eq(projects.id, projectMembers.projectId))
-        .where(and(eq(projectMembers.userId, user.id), includeArchived ? undefined : isNull(projects.archivedAt)))
+        .where(
+          and(eq(projectMembers.userId, user.id), includeArchived ? undefined : isNull(projects.archivedAt)),
+        )
         .orderBy(asc(projects.name));
     }
     const counts = await this.counts(rows.map((r) => r.p.id));
@@ -145,6 +152,32 @@ export class ProjectsService {
       if (settings?.allowedCommands.some((c) => /[;&|`$<>]/.test(c))) {
         throw invalid('Allowed commands must be plain executable names without shell characters');
       }
+      if (req.settings?.workSourceId) {
+        const [s] = await tx
+          .select({ id: sources.id })
+          .from(sources)
+          .where(
+            and(
+              eq(sources.id, req.settings.workSourceId),
+              eq(sources.projectId, id),
+              eq(sources.kind, 'git'),
+            ),
+          );
+        if (!s) throw invalid('The working repository must be a Git source of this project');
+      }
+      if (req.settings?.sandboxDb) {
+        const [c] = await tx
+          .select({ id: credentials.id })
+          .from(credentials)
+          .where(
+            and(
+              eq(credentials.id, req.settings.sandboxDb.credentialId),
+              eq(credentials.projectId, id),
+              eq(credentials.kind, 'oracle_db'),
+            ),
+          );
+        if (!c) throw invalid('The sandbox database needs an Oracle credential stored in this project');
+      }
       const [p] = await tx
         .update(projects)
         .set({
@@ -173,7 +206,13 @@ export class ProjectsService {
   async members(user: SessionUser, projectId: string): Promise<MemberDto[]> {
     await this.access.require(user, projectId, 'project.view');
     const rows = await this.database.db
-      .select({ userId: users.id, name: users.name, email: users.email, role: projectMembers.role, addedAt: projectMembers.createdAt })
+      .select({
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        role: projectMembers.role,
+        addedAt: projectMembers.createdAt,
+      })
       .from(projectMembers)
       .innerJoin(users, eq(users.id, projectMembers.userId))
       .where(eq(projectMembers.projectId, projectId))
@@ -189,7 +228,10 @@ export class ProjectsService {
       await tx
         .insert(projectMembers)
         .values({ projectId, userId: req.userId, role: req.role })
-        .onConflictDoUpdate({ target: [projectMembers.projectId, projectMembers.userId], set: { role: req.role } });
+        .onConflictDoUpdate({
+          target: [projectMembers.projectId, projectMembers.userId],
+          set: { role: req.role },
+        });
       await appendActivity(tx, {
         projectId,
         actorType: 'user',
@@ -202,7 +244,12 @@ export class ProjectsService {
     return this.members(user, projectId);
   }
 
-  async updateMember(user: SessionUser, projectId: string, userId: string, req: UpdateMemberRequest): Promise<MemberDto[]> {
+  async updateMember(
+    user: SessionUser,
+    projectId: string,
+    userId: string,
+    req: UpdateMemberRequest,
+  ): Promise<MemberDto[]> {
     await this.access.require(user, projectId, 'members.manage');
     await this.database.db.transaction(async (tx) => {
       await this.guardLastAdmin(tx, projectId, userId, req.role);
@@ -246,7 +293,12 @@ export class ProjectsService {
   }
 
   /** A project always keeps at least one admin member. */
-  private async guardLastAdmin(tx: Parameters<Parameters<Database['db']['transaction']>[0]>[0], projectId: string, userId: string, newRole: ProjectRole | null) {
+  private async guardLastAdmin(
+    tx: Parameters<Parameters<Database['db']['transaction']>[0]>[0],
+    projectId: string,
+    userId: string,
+    newRole: ProjectRole | null,
+  ) {
     if (newRole === 'admin') return;
     const admins = await tx
       .select({ userId: projectMembers.userId })
@@ -258,7 +310,10 @@ export class ProjectsService {
   }
 
   /** Create or replace the project's intake token. Returned once; only its hash is stored. */
-  async rotateIntakeToken(user: SessionUser, projectId: string): Promise<{ token: string; endpoint: string }> {
+  async rotateIntakeToken(
+    user: SessionUser,
+    projectId: string,
+  ): Promise<{ token: string; endpoint: string }> {
     await this.access.require(user, projectId, 'project.manage');
     const token = `lsa_it_${randomBytes(24).toString('base64url')}`;
     const [p] = await this.database.db
@@ -299,7 +354,11 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  update(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @ZBody(UpdateProjectRequest) body: UpdateProjectRequest) {
+  update(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(UpdateProjectRequest) body: UpdateProjectRequest,
+  ) {
     return this.svc.update(user, id, body);
   }
 
@@ -309,7 +368,11 @@ export class ProjectsController {
   }
 
   @Post(':id/members')
-  addMember(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @ZBody(AddMemberRequest) body: AddMemberRequest) {
+  addMember(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @ZBody(AddMemberRequest) body: AddMemberRequest,
+  ) {
     return this.svc.addMember(user, id, body);
   }
 
@@ -324,7 +387,11 @@ export class ProjectsController {
   }
 
   @Delete(':id/members/:userId')
-  removeMember(@CurrentUser() user: SessionUser, @UuidParam('id') id: string, @UuidParam('userId') userId: string) {
+  removeMember(
+    @CurrentUser() user: SessionUser,
+    @UuidParam('id') id: string,
+    @UuidParam('userId') userId: string,
+  ) {
     return this.svc.removeMember(user, id, userId);
   }
 

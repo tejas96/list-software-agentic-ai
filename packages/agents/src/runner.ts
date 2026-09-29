@@ -40,7 +40,9 @@ const EFFORT: Partial<Record<AgentTask, Effort>> = {
 };
 
 function truncate(text: string): string {
-  return text.length > MAX_TOOL_OUTPUT ? `${text.slice(0, MAX_TOOL_OUTPUT)}\n…[truncated ${text.length - MAX_TOOL_OUTPUT} characters; narrow your request]` : text;
+  return text.length > MAX_TOOL_OUTPUT
+    ? `${text.slice(0, MAX_TOOL_OUTPUT)}\n…[truncated ${text.length - MAX_TOOL_OUTPUT} characters; narrow your request]`
+    : text;
 }
 
 /**
@@ -52,11 +54,15 @@ export async function runAgentTask(opts: RunTaskOptions): Promise<TaskOutcome> {
   const def = TASKS[opts.task];
   const agent = AGENTS[def.agent];
   const schema = ARTIFACT_SCHEMAS[def.produces] as z.ZodType;
-  const resultSchema = modelSchema(z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as Record<string, unknown>);
+  const resultSchema = modelSchema(
+    z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as Record<string, unknown>,
+  );
   const { defs, byName } = toolsFor(agent.toolGroups, resultSchema);
   const ctx: ToolContext = { ...opts.tools, skills: opts.skills, allowedSkills: agent.skills };
   const system = systemPrompt(def.agent, opts.task, opts.skills);
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: [{ type: 'text', text: taskMessage(opts.context) }] }];
+  const messages: Anthropic.Beta.BetaMessageParam[] = [
+    { role: 'user', content: [{ type: 'text', text: taskMessage(opts.context) }] },
+  ];
   const maxTurns = opts.maxTurns ?? DEFAULT_TURNS[opts.task] ?? 40;
   let toolCalls = 0;
   let nudges = 0;
@@ -75,16 +81,38 @@ export async function runAgentTask(opts: RunTaskOptions): Promise<TaskOutcome> {
     messages.push({ role: 'assistant', content: message.content as Anthropic.Beta.BetaContentBlockParam[] });
 
     if (message.stop_reason === 'max_tokens') {
-      messages.push({ role: 'user', content: [{ type: 'text', text: 'Your last response was cut off by the output limit. Continue with smaller steps (for example edit files in parts).' }] });
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Your last response was cut off by the output limit. Continue with smaller steps (for example edit files in parts).',
+          },
+        ],
+      });
       continue;
     }
 
     const uses = message.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
     if (uses.length === 0) {
       if (nudges++ >= 2) {
-        return { status: 'blocked', reason: 'The agent stopped without submitting a result.', needed: 'Review the task inputs and retry the run.', turns: turn, toolCalls };
+        return {
+          status: 'blocked',
+          reason: 'The agent stopped without submitting a result.',
+          needed: 'Review the task inputs and retry the run.',
+          turns: turn,
+          toolCalls,
+        };
       }
-      messages.push({ role: 'user', content: [{ type: 'text', text: `Continue the task. When it is complete and verified, call ${SUBMIT_TOOL}; if you cannot complete it, call ${BLOCKER_TOOL}.` }] });
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Continue the task. When it is complete and verified, call ${SUBMIT_TOOL}; if you cannot complete it, call ${BLOCKER_TOOL}.`,
+          },
+        ],
+      });
       continue;
     }
 
@@ -92,7 +120,9 @@ export async function runAgentTask(opts: RunTaskOptions): Promise<TaskOutcome> {
     const state: { submitted: TaskOutcome | null } = { submitted: null };
 
     // Read-only tools run in parallel; everything else in order.
-    const exec = async (u: Anthropic.Beta.BetaToolUseBlock): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
+    const exec = async (
+      u: Anthropic.Beta.BetaToolUseBlock,
+    ): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
       toolCalls++;
       if (u.name === SUBMIT_TOOL) {
         const parsed = schema.safeParse(u.input);
@@ -104,27 +134,58 @@ export async function runAgentTask(opts: RunTaskOptions): Promise<TaskOutcome> {
             content: `The result does not match the schema. Fix these fields and submit again:\n${parsed.error.issues.map((i) => `- ${i.path.join('.') || '(root)'}: ${i.message}`).join('\n')}`,
           };
         }
-        state.submitted = { status: 'completed', kind: def.produces, output: parsed.data, turns: turn, toolCalls };
+        state.submitted = {
+          status: 'completed',
+          kind: def.produces,
+          output: parsed.data,
+          turns: turn,
+          toolCalls,
+        };
         return { type: 'tool_result', tool_use_id: u.id, content: 'Result recorded.' };
       }
       if (u.name === BLOCKER_TOOL) {
         const b = z.object({ reason: z.string(), needed: z.string() }).safeParse(u.input);
-        state.submitted = { status: 'blocked', reason: b.success ? b.data.reason : 'Unspecified blocker', needed: b.success ? b.data.needed : '', turns: turn, toolCalls };
-        return { type: 'tool_result', tool_use_id: u.id, content: 'Blocker recorded. A person will be asked.' };
+        state.submitted = {
+          status: 'blocked',
+          reason: b.success ? b.data.reason : 'Unspecified blocker',
+          needed: b.success ? b.data.needed : '',
+          turns: turn,
+          toolCalls,
+        };
+        return {
+          type: 'tool_result',
+          tool_use_id: u.id,
+          content: 'Blocker recorded. A person will be asked.',
+        };
       }
       const tool = byName.get(u.name);
-      if (!tool) return { type: 'tool_result', tool_use_id: u.id, is_error: true, content: `Unknown tool ${u.name}` };
+      if (!tool)
+        return { type: 'tool_result', tool_use_id: u.id, is_error: true, content: `Unknown tool ${u.name}` };
       const input = tool.schema.safeParse(u.input);
       if (!input.success) {
-        return { type: 'tool_result', tool_use_id: u.id, is_error: true, content: `Invalid input: ${input.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}` };
+        return {
+          type: 'tool_result',
+          tool_use_id: u.id,
+          is_error: true,
+          content: `Invalid input: ${input.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+        };
       }
       try {
         await ctx.progress(tool.describe(input.data));
         const out = await tool.run(input.data, ctx);
-        return { type: 'tool_result', tool_use_id: u.id, content: truncate(typeof out === 'string' ? out : JSON.stringify(out, null, 1)) };
+        return {
+          type: 'tool_result',
+          tool_use_id: u.id,
+          content: truncate(typeof out === 'string' ? out : JSON.stringify(out, null, 1)),
+        };
       } catch (err) {
         const known = err instanceof WorkspaceError || err instanceof OracleUnavailableError;
-        return { type: 'tool_result', tool_use_id: u.id, is_error: true, content: known ? (err as Error).message : `Tool failed: ${(err as Error).message}` };
+        return {
+          type: 'tool_result',
+          tool_use_id: u.id,
+          is_error: true,
+          content: known ? (err as Error).message : `Tool failed: ${(err as Error).message}`,
+        };
       }
     };
 
@@ -135,7 +196,13 @@ export async function runAgentTask(opts: RunTaskOptions): Promise<TaskOutcome> {
     messages.push({ role: 'user', content: results });
     if (state.submitted) return state.submitted;
     if (!keepGoing) {
-      return { status: 'blocked', reason: 'The run reached its spending limit.', needed: 'Raise the project run budget or approve continuing.', turns: turn, toolCalls };
+      return {
+        status: 'blocked',
+        reason: 'The run reached its spending limit.',
+        needed: 'Raise the project run budget or approve continuing.',
+        turns: turn,
+        toolCalls,
+      };
     }
   }
   return {

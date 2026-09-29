@@ -7,7 +7,9 @@ import { loadRootEnv } from './env.js';
 export async function runMigrations(url: string): Promise<void> {
   const { db, close } = createDb(url, { max: 1 });
   try {
-    await migrate(db, { migrationsFolder: resolve(dirname(fileURLToPath(import.meta.url)), '../migrations') });
+    await migrate(db, {
+      migrationsFolder: resolve(dirname(fileURLToPath(import.meta.url)), '../migrations'),
+    });
   } finally {
     await close();
   }

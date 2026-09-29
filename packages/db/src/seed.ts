@@ -29,7 +29,12 @@ async function main(): Promise<void> {
     await db.transaction(async (tx) => {
       const [admin] = await tx
         .insert(users)
-        .values({ email: email.toLowerCase(), name, passwordHash: await hashPassword(password), isAdmin: true })
+        .values({
+          email: email.toLowerCase(),
+          name,
+          passwordHash: await hashPassword(password),
+          isAdmin: true,
+        })
         .returning({ id: users.id });
       await appendActivity(tx, {
         projectId: null,

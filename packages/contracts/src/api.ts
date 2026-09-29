@@ -1,19 +1,19 @@
 import { z } from 'zod';
 import {
-  ActorType,
-  AgentKey,
-  ArtifactKind,
+  type ActorType,
+  type AgentKey,
+  type ArtifactKind,
   CredentialKind,
-  GateKind,
-  GateStatus,
+  type GateKind,
+  type GateStatus,
   ProjectRole,
-  RunStatus,
-  SourceKind,
-  SourceStatus,
-  StageKey,
-  StepStatus,
+  type RunStatus,
+  type SourceKind,
+  type SourceStatus,
+  type StageKey,
+  type StepStatus,
   TicketPriority,
-  TicketSource,
+  type TicketSource,
   TicketStatus,
   TicketType,
   WorkflowType,
@@ -255,6 +255,10 @@ export interface CommentDto {
 
 export interface ActivityDto {
   id: string;
+  /** Position in the workspace-wide audit chain. */
+  seq: number;
+  /** SHA-256 over this entry and the previous entry's hash. */
+  hash: string;
   projectId: string;
   ticketId: string | null;
   ticketKey: string | null;
@@ -488,7 +492,13 @@ export interface DashboardDto {
   activeRuns: RunSummaryDto[];
   blocked: TicketSummaryDto[];
   recent: ActivityDto[];
-  totals: { open: number; inProgress: number; awaitingApproval: number; blocked: number; doneThisWeek: number };
+  totals: {
+    open: number;
+    inProgress: number;
+    awaitingApproval: number;
+    blocked: number;
+    doneThisWeek: number;
+  };
 }
 
 export interface WorkspaceStatusDto {

@@ -4,8 +4,22 @@ import type { EdgeKind, GraphResult, ObjectRecord, RefRecord } from './types.js'
 
 /** Shape of an Oracle data-dictionary snapshot (see @lsa/adapters readOracleMetadata). */
 export interface MetadataSnapshot {
-  objects: { owner: string; name: string; type: string; status: string; source: string | null; columns: { name: string; dataType: string; nullable: boolean }[] }[];
-  dependencies: { owner: string; name: string; type: string; refOwner: string; refName: string; refType: string }[];
+  objects: {
+    owner: string;
+    name: string;
+    type: string;
+    status: string;
+    source: string | null;
+    columns: { name: string; dataType: string; nullable: boolean }[];
+  }[];
+  dependencies: {
+    owner: string;
+    name: string;
+    type: string;
+    refOwner: string;
+    refName: string;
+    refType: string;
+  }[];
 }
 
 const KIND: Record<string, string> = {
@@ -29,7 +43,10 @@ export function graphFromOracleMetadata(snapshot: MetadataSnapshot): GraphResult
     const k = `${kind}:${o.name}`;
     const existing = objects.get(k);
     const source = o.source ?? '';
-    const header = o.type === 'TABLE' ? `${o.owner}.${o.name}\n${o.columns.map((c) => `${c.name} ${c.dataType}${c.nullable ? '' : ' NOT NULL'}`).join('\n')}` : source;
+    const header =
+      o.type === 'TABLE'
+        ? `${o.owner}.${o.name}\n${o.columns.map((c) => `${c.name} ${c.dataType}${c.nullable ? '' : ' NOT NULL'}`).join('\n')}`
+        : source;
     const record: ObjectRecord = existing ?? {
       kind,
       name: o.name,
@@ -44,15 +61,28 @@ export function graphFromOracleMetadata(snapshot: MetadataSnapshot): GraphResult
     if (o.status !== 'VALID') record.metadata.invalid = true;
     if (o.columns.length) record.metadata.columns = o.columns;
     if (source) {
-      const members = parsePlsqlFile(`CREATE ${o.type} ${o.name} ${source.replace(/^\s*(PACKAGE\s+BODY|PACKAGE|PROCEDURE|FUNCTION|TRIGGER)\s+\S+/i, '')}`)[0]?.members ?? [];
-      if (members.length) record.metadata.members = [...new Set([...((record.metadata.members as string[]) ?? []), ...members])];
+      const members =
+        parsePlsqlFile(
+          `CREATE ${o.type} ${o.name} ${source.replace(/^\s*(PACKAGE\s+BODY|PACKAGE|PROCEDURE|FUNCTION|TRIGGER)\s+\S+/i, '')}`,
+        )[0]?.members ?? [];
+      if (members.length)
+        record.metadata.members = [
+          ...new Set([...((record.metadata.members as string[]) ?? []), ...members]),
+        ];
     }
     const offset = record.chunks.length;
     record.chunks.push(...chunkText(header).map((c) => ({ ...c, ordinal: c.ordinal + offset })));
     record.contentHash = sha256(record.contentHash + header);
     record.summary =
       kind === 'db_table'
-        ? `Table ${o.owner}.${o.name} with ${o.columns.length} column(s)${o.columns.length ? `: ${o.columns.slice(0, 15).map((c) => c.name).join(', ')}` : ''}.`
+        ? `Table ${o.owner}.${o.name} with ${o.columns.length} column(s)${
+            o.columns.length
+              ? `: ${o.columns
+                  .slice(0, 15)
+                  .map((c) => c.name)
+                  .join(', ')}`
+              : ''
+          }.`
         : `${o.type.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())} ${o.owner}.${o.name}${o.status !== 'VALID' ? ' (INVALID in the database)' : ''}.`;
     objects.set(k, record);
   }
@@ -60,7 +90,12 @@ export function graphFromOracleMetadata(snapshot: MetadataSnapshot): GraphResult
     const fromKind = KIND[d.type];
     const toKind = KIND[d.refType];
     if (!fromKind || !toKind || (d.name === d.refName && fromKind === toKind)) continue;
-    const kind: EdgeKind = toKind === 'db_table' || toKind === 'db_view' ? 'reads' : toKind === 'db_sequence' ? 'references' : 'calls';
+    const kind: EdgeKind =
+      toKind === 'db_table' || toKind === 'db_view'
+        ? 'reads'
+        : toKind === 'db_sequence'
+          ? 'references'
+          : 'calls';
     refs.push({ from: { kind: fromKind, name: d.name }, toName: d.refName, toKinds: [toKind], kind });
   }
   return { objects: [...objects.values()], refs, warnings: [] };
@@ -108,14 +143,22 @@ const RELATION: Record<string, EdgeKind> = {
 export function graphFromGraphify(json: unknown): GraphResult {
   const warnings: string[] = [];
   const g = json as { nodes?: GraphifyNode[]; links?: GraphifyLink[]; edges?: GraphifyLink[] };
-  if (!g || !Array.isArray(g.nodes)) return { objects: [], refs: [], warnings: ['graph.json has no "nodes" array'] };
+  if (!g || !Array.isArray(g.nodes))
+    return { objects: [], refs: [], warnings: ['graph.json has no "nodes" array'] };
   const byId = new Map<string, { kind: string; name: string }>();
   const objects: ObjectRecord[] = [];
   for (const n of g.nodes) {
     const id = String(n.id ?? n.name ?? n.label ?? '');
     if (!id) continue;
     const type = String(n.type ?? n.kind ?? 'module').toLowerCase();
-    const kind = type.includes('class') || type.includes('interface') ? 'class' : type.includes('func') || type.includes('method') ? 'function' : type.includes('file') ? 'file' : 'module';
+    const kind =
+      type.includes('class') || type.includes('interface')
+        ? 'class'
+        : type.includes('func') || type.includes('method')
+          ? 'function'
+          : type.includes('file')
+            ? 'file'
+            : 'module';
     const name = String(n.label ?? n.name ?? id);
     const file = n.file ?? n.source_file ?? n.path ?? null;
     const identity = { kind, name: file && kind !== 'file' ? `${file}#${name}` : name };

@@ -1,4 +1,11 @@
-import { applyDecorators, Body, createParamDecorator, Query, type ExecutionContext, type PipeTransform } from '@nestjs/common';
+import {
+  applyDecorators,
+  Body,
+  createParamDecorator,
+  Query,
+  type ExecutionContext,
+  type PipeTransform,
+} from '@nestjs/common';
 import { ApiBody } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -16,7 +23,10 @@ export function ZBody<T extends z.ZodType>(schema: T): ParameterDecorator {
     Body(new ZodPipe(schema))(target, key, index);
     if (key !== undefined) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
-      if (descriptor) applyDecorators(ApiBody({ schema: z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as object }))(target, key, descriptor);
+      if (descriptor)
+        applyDecorators(
+          ApiBody({ schema: z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as object }),
+        )(target, key, descriptor);
     }
   };
 }

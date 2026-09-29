@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { asc, desc, sql } from 'drizzle-orm';
-import { EVENTS_CHANNEL, type ActivityType, type ActorType, type AgentKey, type RealtimeEvent } from '@lsa/contracts';
+import {
+  EVENTS_CHANNEL,
+  type ActivityType,
+  type ActorType,
+  type AgentKey,
+  type RealtimeEvent,
+} from '@lsa/contracts';
 import type { DbOrTx } from './client.js';
 import { activities } from './schema.js';
 
@@ -29,19 +35,22 @@ export function canonicalJson(value: unknown): string {
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
 }
 
-export function activityHash(prevHash: string, row: {
-  id: string;
-  projectId: string | null;
-  ticketId: string | null;
-  runId: string | null;
-  actorType: string;
-  actorId: string | null;
-  agentKey: string | null;
-  type: string;
-  summary: string;
-  data: Record<string, unknown>;
-  createdAt: string;
-}): string {
+export function activityHash(
+  prevHash: string,
+  row: {
+    id: string;
+    projectId: string | null;
+    ticketId: string | null;
+    runId: string | null;
+    actorType: string;
+    actorId: string | null;
+    agentKey: string | null;
+    type: string;
+    summary: string;
+    data: Record<string, unknown>;
+    createdAt: string;
+  },
+): string {
   return createHash('sha256').update(prevHash).update('\n').update(canonicalJson(row)).digest('hex');
 }
 
@@ -52,7 +61,11 @@ export function activityHash(prevHash: string, row: {
  */
 export async function appendActivity(tx: DbOrTx, input: ActivityInput): Promise<{ id: string; seq: number }> {
   await tx.execute(sql`select pg_advisory_xact_lock(${CHAIN_LOCK_KEY})`);
-  const [last] = await tx.select({ hash: activities.hash }).from(activities).orderBy(desc(activities.seq)).limit(1);
+  const [last] = await tx
+    .select({ hash: activities.hash })
+    .from(activities)
+    .orderBy(desc(activities.seq))
+    .limit(1);
   const prevHash = last?.hash ?? GENESIS_HASH;
   const id = crypto.randomUUID();
   const createdAt = new Date();

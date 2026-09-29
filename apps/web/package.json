@@ -1,0 +1,40 @@
+{
+  "name": "@lsa/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
+    "@lsa/contracts": "workspace:*",
+    "@tanstack/react-query": "5.104.0",
+    "clsx": "2.1.1",
+    "lucide-react": "1.48.0",
+    "motion": "13.4.6",
+    "next": "16.3.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "socket.io-client": "4.8.4",
+    "tailwind-merge": "3.7.0"
+  },
+  "devDependencies": {
+    "@lsa/config": "workspace:*",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "22.20.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  }
+}

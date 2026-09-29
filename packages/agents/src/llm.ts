@@ -29,7 +29,15 @@ export class LlmError extends Error {
   constructor(
     message: string,
     public readonly retryable: boolean,
-    public readonly code: 'not_configured' | 'auth' | 'rate_limited' | 'overloaded' | 'bad_request' | 'refused' | 'network' | 'unknown',
+    public readonly code:
+      | 'not_configured'
+      | 'auth'
+      | 'rate_limited'
+      | 'overloaded'
+      | 'bad_request'
+      | 'refused'
+      | 'network'
+      | 'unknown',
   ) {
     super(message);
     this.name = 'LlmError';
@@ -46,7 +54,10 @@ const PRICES: Record<string, [number, number, number, number]> = {
   'claude-fable-5-1': [10, 50, 0.25, 12.5],
 };
 
-export function costOf(model: string, u: { input: number; output: number; cacheRead: number; cacheWrite: number }): number {
+export function costOf(
+  model: string,
+  u: { input: number; output: number; cacheRead: number; cacheWrite: number },
+): number {
   const p = PRICES[model] ?? PRICES['claude-opus-5-5']!;
   return (u.input * p[0] + u.output * p[1] + u.cacheRead * p[2] + u.cacheWrite * p[3]) / 1_000_000;
 }
@@ -68,7 +79,9 @@ export class LlmGateway {
   private readonly client: Anthropic | null;
 
   constructor(private readonly options: LlmGatewayOptions) {
-    this.client = options.apiKey ? new Anthropic({ apiKey: options.apiKey, maxRetries: 3, timeout: options.timeoutMs ?? 20 * 60_000 }) : null;
+    this.client = options.apiKey
+      ? new Anthropic({ apiKey: options.apiKey, maxRetries: 3, timeout: options.timeoutMs ?? 20 * 60_000 })
+      : null;
   }
 
   get available(): boolean {
@@ -81,7 +94,11 @@ export class LlmGateway {
 
   async call(req: LlmCall): Promise<{ message: Anthropic.Beta.BetaMessage; usage: LlmUsage }> {
     if (!this.client) {
-      throw new LlmError('No LLM provider is configured. Set ANTHROPIC_API_KEY for the worker and API.', false, 'not_configured');
+      throw new LlmError(
+        'No LLM provider is configured. Set ANTHROPIC_API_KEY for the worker and API.',
+        false,
+        'not_configured',
+      );
     }
     const betas: Anthropic.Beta.AnthropicBeta[] = [];
     if (this.options.refusalFallback) betas.push('server-side-fallback-2026-07-01');
@@ -101,7 +118,15 @@ export class LlmGateway {
       ...(req.tools?.length && { tools: req.tools }),
       ...(this.options.refusalFallback && { fallbacks: 'default' as const }),
       ...(req.pruneToolResults && {
-        context_management: { edits: [{ type: 'clear_tool_uses_20250919' as const, keep: { type: 'tool_uses' as const, value: 8 }, exclude_tools: ['load_skill', 'submit_result'] }] },
+        context_management: {
+          edits: [
+            {
+              type: 'clear_tool_uses_20250919' as const,
+              keep: { type: 'tool_uses' as const, value: 8 },
+              exclude_tools: ['load_skill', 'submit_result'],
+            },
+          ],
+        },
       }),
       ...(betas.length && { betas }),
     };
@@ -123,7 +148,11 @@ export class LlmGateway {
       }
     }
     if (message.stop_reason === 'refusal') {
-      throw new LlmError('The model declined this request. Rephrase the ticket or ask an administrator to review it.', false, 'refused');
+      throw new LlmError(
+        'The model declined this request. Rephrase the ticket or ask an administrator to review it.',
+        false,
+        'refused',
+      );
     }
     const u = message.usage;
     const usage: LlmUsage = {
@@ -148,11 +177,16 @@ function classify(err: unknown): LlmError {
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
     return new LlmError('The LLM provider rejected the API key. Check ANTHROPIC_API_KEY.', false, 'auth');
   }
-  if (err instanceof Anthropic.RateLimitError) return new LlmError('The LLM provider is rate limiting requests.', true, 'rate_limited');
-  if (err instanceof Anthropic.BadRequestError) return new LlmError(`The LLM request was rejected: ${err.message}`, false, 'bad_request');
-  if (err instanceof Anthropic.InternalServerError) return new LlmError('The LLM provider is overloaded or failing.', true, 'overloaded');
-  if (err instanceof Anthropic.APIConnectionError) return new LlmError('Could not reach the LLM provider.', true, 'network');
-  if (err instanceof Anthropic.APIError) return new LlmError(`LLM error ${err.status}: ${err.message}`, (err.status ?? 500) >= 500, 'unknown');
+  if (err instanceof Anthropic.RateLimitError)
+    return new LlmError('The LLM provider is rate limiting requests.', true, 'rate_limited');
+  if (err instanceof Anthropic.BadRequestError)
+    return new LlmError(`The LLM request was rejected: ${err.message}`, false, 'bad_request');
+  if (err instanceof Anthropic.InternalServerError)
+    return new LlmError('The LLM provider is overloaded or failing.', true, 'overloaded');
+  if (err instanceof Anthropic.APIConnectionError)
+    return new LlmError('Could not reach the LLM provider.', true, 'network');
+  if (err instanceof Anthropic.APIError)
+    return new LlmError(`LLM error ${err.status}: ${err.message}`, (err.status ?? 500) >= 500, 'unknown');
   return new LlmError((err as Error)?.message ?? 'Unknown LLM error', true, 'unknown');
 }
 
@@ -170,14 +204,30 @@ export function textOf(message: Anthropic.Beta.BetaMessage): string {
  * not support and close every object. The full zod schema still validates the result.
  */
 export function modelSchema(schema: Record<string, unknown>): Record<string, unknown> {
-  const DROP = new Set(['$schema', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'pattern', 'format', 'minItems', 'maxItems', 'default']);
+  const DROP = new Set([
+    '$schema',
+    'minLength',
+    'maxLength',
+    'minimum',
+    'maximum',
+    'exclusiveMinimum',
+    'exclusiveMaximum',
+    'pattern',
+    'format',
+    'minItems',
+    'maxItems',
+    'default',
+  ]);
   const walk = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(walk);
     if (!node || typeof node !== 'object') return node;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
       if (DROP.has(k)) continue;
-      out[k] = k === 'properties' && v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([pk, pv]) => [pk, walk(pv)])) : walk(v);
+      out[k] =
+        k === 'properties' && v && typeof v === 'object'
+          ? Object.fromEntries(Object.entries(v).map(([pk, pv]) => [pk, walk(pv)]))
+          : walk(v);
     }
     if (out.type === 'object' && out.properties) {
       out.additionalProperties = false;

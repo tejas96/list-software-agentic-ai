@@ -135,7 +135,9 @@ export const ReviewReport = z.object({
 export const SecurityReport = z.object({
   summary: z.string(),
   approved: z.boolean(),
-  checks: z.array(z.object({ check: z.string(), result: z.enum(['pass', 'fail', 'not_applicable']), notes: z.string() })),
+  checks: z.array(
+    z.object({ check: z.string(), result: z.enum(['pass', 'fail', 'not_applicable']), notes: z.string() }),
+  ),
   findings: z.array(Finding),
 });
 

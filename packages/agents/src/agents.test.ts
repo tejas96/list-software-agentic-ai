@@ -10,7 +10,14 @@ import type { KnowledgeAccess } from './tools.js';
 
 const skills = new SkillRegistry();
 
-const usage: LlmUsage = { model: 'test', inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0.01 };
+const usage: LlmUsage = {
+  model: 'test',
+  inputTokens: 10,
+  outputTokens: 5,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  costUsd: 0.01,
+};
 
 /** A scripted model: each call returns the next list of content blocks. */
 function scripted(turns: Anthropic.Beta.BetaContentBlock[][]): { llm: LlmGateway; calls: LlmCall[] } {
@@ -29,20 +36,45 @@ function scripted(turns: Anthropic.Beta.BetaContentBlock[][]): { llm: LlmGateway
   return { llm, calls };
 }
 
-const tool = (id: string, name: string, input: unknown) => ({ type: 'tool_use', id, name, input }) as unknown as Anthropic.Beta.BetaContentBlock;
+const tool = (id: string, name: string, input: unknown) =>
+  ({ type: 'tool_use', id, name, input }) as unknown as Anthropic.Beta.BetaContentBlock;
 
 const knowledge: KnowledgeAccess = {
-  search: async (q) => [{ name: 'CUSTOMER_ACCOUNT', kind: 'oracle_form', path: 'forms/CUSTOMER_ACCOUNT_fmb.xml', summary: `match for ${q}`, snippet: '' }],
+  search: async (q) => [
+    {
+      name: 'CUSTOMER_ACCOUNT',
+      kind: 'oracle_form',
+      path: 'forms/CUSTOMER_ACCOUNT_fmb.xml',
+      summary: `match for ${q}`,
+      snippet: '',
+    },
+  ],
   object: async () => null,
   dependencies: async () => [],
 };
 
 const context: TaskContext = {
   project: { key: 'BNK', name: 'Core Banking', clientName: '', techStack: ['Oracle Forms'] },
-  ticket: { key: 'BNK-1', type: 'feature', priority: 'medium', title: 'Add address', description: 'Add a customer address field.', acceptanceCriteria: [] },
+  ticket: {
+    key: 'BNK-1',
+    type: 'feature',
+    priority: 'medium',
+    title: 'Add address',
+    description: 'Add a customer address field.',
+    acceptanceCriteria: [],
+  },
   artifacts: [],
   feedback: [],
-  environment: { workspace: false, branch: null, oracleForms: false, oracleReports: false, sandboxDb: false, testCommand: null, buildCommand: null, allowedCommands: [] },
+  environment: {
+    workspace: false,
+    branch: null,
+    oracleForms: false,
+    oracleReports: false,
+    sandboxDb: false,
+    testCommand: null,
+    buildCommand: null,
+    allowedCommands: [],
+  },
 };
 
 const validSpec = {
@@ -52,7 +84,9 @@ const validSpec = {
   priority: 'medium',
   userStory: 'As a teller I want to record the address.',
   requirements: [{ id: 'R1', text: 'The form captures the address.' }],
-  acceptanceCriteria: [{ id: 'AC1', given: 'a new customer', when: 'the teller saves', then: 'the address is stored' }],
+  acceptanceCriteria: [
+    { id: 'AC1', given: 'a new customer', when: 'the teller saves', then: 'the address is stored' },
+  ],
   assumptions: [],
   openQuestions: [],
   outOfScope: [],
@@ -87,14 +121,24 @@ describe('runAgentTask', () => {
   it('runs tools, rejects an invalid result, then accepts a valid one', async () => {
     const progress: string[] = [];
     const { llm, calls } = scripted([
-      [tool('t1', 'load_skill', { name: 'requirements-engineering' }), tool('t2', 'knowledge_search', { query: 'account opening' })],
+      [
+        tool('t1', 'load_skill', { name: 'requirements-engineering' }),
+        tool('t2', 'knowledge_search', { query: 'account opening' }),
+      ],
       [tool('t3', 'submit_result', { title: 'x' })],
       [tool('t4', 'submit_result', validSpec)],
     ]);
-    const out = await runAgentTask({ ...baseOpts(llm), tools: { ...baseOpts(llm).tools, progress: async (a) => void progress.push(a) }, onUsage: async () => true });
+    const out = await runAgentTask({
+      ...baseOpts(llm),
+      tools: { ...baseOpts(llm).tools, progress: async (a) => void progress.push(a) },
+      onUsage: async () => true,
+    });
     expect(out.status).toBe('completed');
     expect(out.status === 'completed' && (out.output as { title: string }).title).toBe(validSpec.title);
-    expect(progress).toEqual(['Loading the requirements-engineering skill', 'Searching the knowledge graph for “account opening”']);
+    expect(progress).toEqual([
+      'Loading the requirements-engineering skill',
+      'Searching the knowledge graph for “account opening”',
+    ]);
     // The invalid submission was returned to the model as an error with the fields to fix.
     const third = calls[2]!.messages.at(-1)!;
     const res = (third.content as Anthropic.Beta.BetaToolResultBlockParam[])[0]!;
@@ -103,7 +147,9 @@ describe('runAgentTask', () => {
   });
 
   it('records a blocker', async () => {
-    const { llm } = scripted([[tool('b', 'report_blocker', { reason: 'No repository connected', needed: 'Connect the Git source' })]]);
+    const { llm } = scripted([
+      [tool('b', 'report_blocker', { reason: 'No repository connected', needed: 'Connect the Git source' })],
+    ]);
     const out = await runAgentTask({ ...baseOpts(llm), onUsage: async () => true });
     expect(out).toMatchObject({ status: 'blocked', reason: 'No repository connected' });
   });
@@ -115,7 +161,10 @@ describe('runAgentTask', () => {
   });
 
   it('refuses tools outside the agent groups', async () => {
-    const { llm, calls } = scripted([[tool('w', 'write_file', { path: 'x', content: 'y' })], [tool('s', 'submit_result', validSpec)]]);
+    const { llm, calls } = scripted([
+      [tool('w', 'write_file', { path: 'x', content: 'y' })],
+      [tool('s', 'submit_result', validSpec)],
+    ]);
     const out = await runAgentTask({ ...baseOpts(llm), onUsage: async () => true });
     expect(out.status).toBe('completed');
     const res = (calls[1]!.messages.at(-1)!.content as Anthropic.Beta.BetaToolResultBlockParam[])[0]!;
@@ -127,16 +176,33 @@ describe('runAgentTask', () => {
     const text = { type: 'text', text: 'Thinking out loud' } as unknown as Anthropic.Beta.BetaContentBlock;
     const { llm } = scripted([[text]]);
     const out = await runAgentTask({ ...baseOpts(llm), onUsage: async () => true });
-    expect(out).toMatchObject({ status: 'blocked', reason: 'The agent stopped without submitting a result.' });
+    expect(out).toMatchObject({
+      status: 'blocked',
+      reason: 'The agent stopped without submitting a result.',
+    });
   });
 });
 
 describe('modelSchema', () => {
   it('closes objects and drops unsupported keywords', () => {
-    const s = modelSchema({ type: 'object', properties: { a: { type: 'string', minLength: 3 }, b: { type: 'object', properties: { c: { type: 'number', minimum: 1 } } } } });
+    const s = modelSchema({
+      type: 'object',
+      properties: {
+        a: { type: 'string', minLength: 3 },
+        b: { type: 'object', properties: { c: { type: 'number', minimum: 1 } } },
+      },
+    });
     expect(s).toEqual({
       type: 'object',
-      properties: { a: { type: 'string' }, b: { type: 'object', properties: { c: { type: 'number' } }, additionalProperties: false, required: ['c'] } },
+      properties: {
+        a: { type: 'string' },
+        b: {
+          type: 'object',
+          properties: { c: { type: 'number' } },
+          additionalProperties: false,
+          required: ['c'],
+        },
+      },
       additionalProperties: false,
       required: ['a', 'b'],
     });

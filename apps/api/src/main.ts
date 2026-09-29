@@ -12,7 +12,10 @@ import { APP_CONFIG, type AppConfig } from './config.js';
 
 export async function createApp(options: { logger?: boolean } = {}): Promise<INestApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: options.logger === false ? false : new ConsoleLogger({ json: process.env.NODE_ENV === 'production', prefix: 'lsa-api' }),
+    logger:
+      options.logger === false
+        ? false
+        : new ConsoleLogger({ json: process.env.NODE_ENV === 'production', prefix: 'lsa-api' }),
     bufferLogs: true,
   });
   const config = app.get<AppConfig>(APP_CONFIG);
@@ -33,7 +36,11 @@ export async function createApp(options: { logger?: boolean } = {}): Promise<INe
 
   const doc = SwaggerModule.createDocument(
     app,
-    new DocumentBuilder().setTitle('List Software Agentic Platform API').setVersion('1.0').addCookieAuth('lsa_session').build(),
+    new DocumentBuilder()
+      .setTitle('List Software Agentic Platform API')
+      .setVersion('1.0')
+      .addCookieAuth('lsa_session')
+      .build(),
   );
   SwaggerModule.setup('api/docs', app, doc);
   return app;

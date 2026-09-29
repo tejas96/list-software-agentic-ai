@@ -72,7 +72,9 @@ describe.skipIf(!url)('audit trail (database)', () => {
         return e.cause?.message ?? e.message ?? '';
       }
     };
-    expect(await causeOf(handle.db.execute(sql`update activities set summary = 'changed'`))).toMatch(/append-only/);
+    expect(await causeOf(handle.db.execute(sql`update activities set summary = 'changed'`))).toMatch(
+      /append-only/,
+    );
     expect(await causeOf(handle.db.execute(sql`delete from activities`))).toMatch(/append-only/);
   });
 });

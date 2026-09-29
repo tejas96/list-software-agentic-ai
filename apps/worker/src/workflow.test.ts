@@ -53,7 +53,16 @@ describe.skipIf(!(await reachable()))('sdlcRunWorkflow (Temporal)', () => {
     nativeConn = await NativeConnection.connect({ address: ADDRESS });
     client = new Client({ connection: await Connection.connect({ address: ADDRESS }) });
     const shared = {
-      loadRun: async () => ({ runId: 'r1', ticketId: 't1', ticketKey: 'BNK-1', projectId: 'p1', workflowType: 'full_change', gates: { plan: true, release: true }, qaMaxAttempts: 3, maxPlanRevisions: 3 }),
+      loadRun: async () => ({
+        runId: 'r1',
+        ticketId: 't1',
+        ticketKey: 'BNK-1',
+        projectId: 'p1',
+        workflowType: 'full_change',
+        gates: { plan: true, release: true },
+        qaMaxAttempts: 3,
+        maxPlanRevisions: 3,
+      }),
       claimHost: async () => queue,
       setRunStatus: async (_r: string, s: string) => void calls.push(`status:${s}`),
       enterStage: async (_r: string, stage: string) => void calls.push(`stage:${stage}`),
@@ -87,11 +96,15 @@ describe.skipIf(!(await reachable()))('sdlcRunWorkflow (Temporal)', () => {
         calls.push(`task:${input.task as AgentTask}${input.feedback.length ? '+feedback' : ''}`);
         if (input.task === 'run_tests') {
           testRuns++;
-          return testRuns === 1 ? ok({ passed: false, failures: ['T3 report validation failed'] }) : ok({ passed: true });
+          return testRuns === 1
+            ? ok({ passed: false, failures: ['T3 report validation failed'] })
+            : ok({ passed: true });
         }
         if (input.task === 'code_review') {
           reviews++;
-          return reviews === 1 ? ok({ approved: false, failures: ['[major] missing audit column'] }) : ok({ approved: true });
+          return reviews === 1
+            ? ok({ approved: false, failures: ['[major] missing audit column'] })
+            : ok({ approved: true });
         }
         if (input.task === 'security_review') return ok({ approved: true });
         return ok();
@@ -117,7 +130,11 @@ describe.skipIf(!(await reachable()))('sdlcRunWorkflow (Temporal)', () => {
   });
 
   it('drives a change from requirement to release through both gates and the QA loop', async () => {
-    const handle = await client.workflow.start(WORKFLOW_NAMES.run, { taskQueue: queue, workflowId: `wf-${queue}`, args: [{ runId: 'r1' }] });
+    const handle = await client.workflow.start(WORKFLOW_NAMES.run, {
+      taskQueue: queue,
+      workflowId: `wf-${queue}`,
+      args: [{ runId: 'r1' }],
+    });
     const waitForGate = async (n: number) => {
       for (let i = 0; i < 200; i++) {
         const s = await handle.query<RunWorkflowState>('runState');
@@ -129,12 +146,27 @@ describe.skipIf(!(await reachable()))('sdlcRunWorkflow (Temporal)', () => {
 
     // Plan gate: send back once, then approve the revision.
     let gate = await waitForGate(1);
-    await handle.signal(SIGNALS.gateDecision, { gateId: gate, decision: 'changes_requested', note: 'Split the report change', userId: 'u1' });
+    await handle.signal(SIGNALS.gateDecision, {
+      gateId: gate,
+      decision: 'changes_requested',
+      note: 'Split the report change',
+      userId: 'u1',
+    });
     gate = await waitForGate(2);
-    await handle.signal(SIGNALS.gateDecision, { gateId: gate, decision: 'approved', note: null, userId: 'u1' });
+    await handle.signal(SIGNALS.gateDecision, {
+      gateId: gate,
+      decision: 'approved',
+      note: null,
+      userId: 'u1',
+    });
     // Release gate.
     gate = await waitForGate(3);
-    await handle.signal(SIGNALS.gateDecision, { gateId: gate, decision: 'approved', note: null, userId: 'u2' });
+    await handle.signal(SIGNALS.gateDecision, {
+      gateId: gate,
+      decision: 'approved',
+      note: null,
+      userId: 'u2',
+    });
     expect(await handle.result()).toBe('succeeded');
     expect(completed).toEqual({ status: 'succeeded', message: null });
 
@@ -143,7 +175,11 @@ describe.skipIf(!(await reachable()))('sdlcRunWorkflow (Temporal)', () => {
     expect(seq).toContain('task:change_plan+feedback');
     // The failed test was logged as a defect, fixed, re-tested, and the defect resolved.
     const firstFail = seq.indexOf('defects:logged');
-    expect(seq.slice(firstFail, firstFail + 3)).toEqual(['defects:logged', 'task:fix_failures+feedback', 'task:run_tests']);
+    expect(seq.slice(firstFail, firstFail + 3)).toEqual([
+      'defects:logged',
+      'task:fix_failures+feedback',
+      'task:run_tests',
+    ]);
     expect(seq).toContain('defects:resolved');
     // The review finding went back through fix and test before verify passed.
     expect(seq.filter((c) => c === 'task:code_review')).toHaveLength(2);
@@ -156,7 +192,11 @@ describe.skipIf(!(await reachable()))('sdlcRunWorkflow (Temporal)', () => {
   it('cancels cleanly while waiting at a gate', async () => {
     gates.length = 0;
     completed = null;
-    const handle = await client.workflow.start(WORKFLOW_NAMES.run, { taskQueue: queue, workflowId: `wf-cancel-${queue}`, args: [{ runId: 'r1' }] });
+    const handle = await client.workflow.start(WORKFLOW_NAMES.run, {
+      taskQueue: queue,
+      workflowId: `wf-cancel-${queue}`,
+      args: [{ runId: 'r1' }],
+    });
     for (let i = 0; i < 200 && gates.length === 0; i++) await new Promise((r) => setTimeout(r, 100));
     await handle.signal(SIGNALS.control, { action: 'cancel', userId: 'u1', note: 'Not needed any more' });
     expect(await handle.result()).toBe('cancelled');
