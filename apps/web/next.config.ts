@@ -1,5 +1,10 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
+
+// Load the repository-root .env like the other apps; values already in the environment win.
+const rootEnv = path.resolve(process.cwd(), '../../.env');
+if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const API = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 

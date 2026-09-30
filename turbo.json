@@ -18,7 +18,8 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["API_INTERNAL_URL", "NEXT_PUBLIC_*"]
     }
   }
 }

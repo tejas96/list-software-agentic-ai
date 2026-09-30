@@ -33,26 +33,74 @@ services:
       timeout: 5s
       retries: 20
 
-  temporal:
-    image: temporalio/auto-setup:1.28.1
-    restart: unless-stopped
+  # Creates or upgrades Temporal's two databases, then exits. Safe to run on every `up`.
+  temporal-schema:
+    image: temporalio/admin-tools:1.30.6
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      SQL_PLUGIN: postgres12
+      SQL_HOST: postgres
+      SQL_PORT: '5432'
+      SQL_USER: ${POSTGRES_USER:-lsa}
+      SQL_PASSWORD: ${POSTGRES_PASSWORD:-lsa}
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        set -e
+        S=/etc/temporal/schema/postgresql/v12
+        for db in temporal temporal_visibility; do
+          dir=$$S/temporal; [ $$db = temporal_visibility ] && dir=$$S/visibility
+          temporal-sql-tool --db $$db create-database 2>/dev/null || true
+          temporal-sql-tool --db $$db setup-schema -v 0.0 2>/dev/null || true
+          temporal-sql-tool --db $$db update-schema -d $$dir/versioned
+        done
+    restart: 'no'
+
+  temporal:
+    image: temporalio/server:1.30.6
+    restart: unless-stopped
+    depends_on:
+      temporal-schema:
+        condition: service_completed_successfully
+    # Read by the server's built-in config template.
     environment:
       DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-lsa}
       POSTGRES_PWD: ${POSTGRES_PASSWORD:-lsa}
       POSTGRES_SEEDS: postgres
-      DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      BIND_ON_IP: 0.0.0.0
+    volumes:
+      - './temporal/dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/docker.yaml:ro'
     ports:
       - '${TEMPORAL_PORT:-7233}:7233'
     healthcheck:
-      test: ['CMD-SHELL', 'tctl --address temporal:7233 cluster health | grep -q SERVING']
-      interval: 10s
-      timeout: 5s
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 7233 || exit 1']
+      interval: 5s
+      timeout: 3s
       retries: 30
+
+  # Registers the namespace the apps use, then exits.
+  temporal-namespace:
+    image: temporalio/admin-tools:1.30.6
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      NS: ${TEMPORAL_NAMESPACE:-default}
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          temporal operator namespace describe -n $$NS >/dev/null 2>&1 && exit 0
+          temporal operator namespace create -n $$NS >/dev/null 2>&1 && exit 0
+          sleep 2
+        done
+        echo "could not register namespace $$NS"; exit 1
+    restart: 'no'
 
   temporal-ui:
     image: temporalio/ui:2.39.0
@@ -84,8 +132,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      temporal:
-        condition: service_healthy
+      temporal-namespace:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   worker:
@@ -97,8 +145,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      temporal:
-        condition: service_healthy
+      temporal-namespace:
+        condition: service_completed_successfully
     volumes:
       - workspaces:/data/workspaces
     restart: unless-stopped
